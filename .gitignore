@@ -1,0 +1,12 @@
+server/node_modules/
+.runtime/
+deploy/config.env
+.idea/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.log

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>运输船 · 联机改造</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    background:radial-gradient(120% 120% at 50% 0%,#241a0e,#0b0b0d);color:#eee;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  h1{font-size:20px;letter-spacing:2px;margin:0 0 4px}
+  p{margin:0;color:#9a9a9a;font-size:13px}
+  .cards{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+  a{display:block;width:250px;padding:18px 20px;border-radius:12px;text-decoration:none;color:#eee;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,180,90,.25)}
+  a:hover{background:rgba(255,180,90,.12)}
+  a b{display:block;font-size:15px;margin-bottom:6px;color:#f5b321}
+  a span{font-size:12px;color:#9a9a9a;line-height:1.6}
+  code{background:rgba(0,0,0,.4);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+  <h1>运输船 · 穿越火线 3D</h1>
+  <p>联机改造：房间 + 选阵营 + 5v5 状态同步</p>
+  <div class="cards">
+    <a href="transport-ship-mp.html">
+      <b>进入游戏（联机版）</b>
+      <span>打开页面先注册或登录 → 建房间 / 进房间 → 准备 → 开始</span>
+    </a>
+    <a href="web/testbed.html">
+      <b>联机流程测试台</b>
+      <span>2D 俯视沙盒，开两个标签页即可验证同步是否正常</span>
+    </a>
+  </div>
+  <p style="margin-top:14px">没起服务器？<code>cd server &amp;&amp; npm i &amp;&amp; npm start</code></p>
+</body>
+</html>

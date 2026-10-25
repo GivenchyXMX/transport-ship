@@ -1,0 +1,687 @@
+/* =============================================================================
+ *  ui.js —— 房间界面（大厅 / 房间 / 选阵营）
+ *  纯 DOM，不依赖任何框架，游戏页和测试台共用。
+ *
+ *  CFRoomUI.mount(room, { onStart }) → { open, close, render }
+ *  CFRoomUI.injectMenuButton(text, onClick)
+ * ========================================================================== */
+(function (global) {
+  'use strict';
+
+  const TEAM = {
+    BL: { name: '潜伏者', color: '#ff9b70', desc: 'Black List' },
+    GR: { name: '保卫者', color: '#8cc8ff', desc: 'Global Risk' },
+  };
+
+  const CSS = `
+  #cfMp{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%,rgba(20,12,6,.86),rgba(6,6,8,.96));
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#eee;backdrop-filter:blur(6px)}
+  #cfMp.hidden{display:none}
+  .cfCard{width:min(920px,94vw);max-height:88vh;overflow:auto;background:rgba(18,16,14,.92);
+    border:1px solid rgba(255,180,90,.25);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .cfCard.hasOnline{width:min(1160px,96vw)}
+  .cfLayout{display:grid;grid-template-columns:minmax(0,1fr) 250px}
+  .cfHead{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .cfHead h1{font-size:17px;margin:0;letter-spacing:1px}
+  .cfHead .dot{width:8px;height:8px;border-radius:50%;background:#777}
+  .cfHead .dot.on{background:#3ddc84;box-shadow:0 0 10px #3ddc84}
+  .cfHead .sp{flex:1}
+  .cfBody{padding:18px 20px;min-width:0}
+  .cfOnlinePanel{padding:18px 14px;border-left:1px solid rgba(255,255,255,.08);min-width:0}
+  .cfOnlineTitle{font-size:13px;font-weight:700;color:#f5b321;margin-bottom:10px}
+  .cfOnlineList{max-height:48vh;overflow-y:auto}
+  .cfOnlineEntry{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+  .cfOnlineInfo{flex:1;min-width:0}
+  .cfOnlineName{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cfOnlineState{font-size:11px;color:#9a9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+  .cfOnlineFollow{flex:none;padding:5px 8px!important;font-size:11px!important}
+  #cfInvitePopup{position:fixed;top:16px;right:16px;z-index:100001;width:min(340px,calc(100vw - 32px));
+    padding:16px;border:1px solid rgba(245,179,33,.55);border-radius:12px;
+    background:#211b13;box-shadow:0 16px 48px rgba(0,0,0,.55);color:#eee;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  #cfInvitePopup .title{font-size:14px;font-weight:700;color:#f5b321;margin-bottom:8px}
+  #cfInvitePopup .message{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+  #cfInvitePopup .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .cfOnlineEmpty{font-size:12px;color:#888;padding:8px 0}
+  .cfMenuOnline{margin-top:18px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.2)}
+  .cfMenuOnline .cfOnlineList{max-height:180px}
+  @media(max-width:720px){.cfLayout{grid-template-columns:1fr}.cfOnlinePanel{border-left:0;border-top:1px solid rgba(255,255,255,.08)}}
+  .cfRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  input.cf,select.cf{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);color:#eee;
+    border-radius:8px;padding:9px 11px;font-size:13px;outline:none}
+  input.cf:focus,select.cf:focus{border-color:#f5b321}
+  button.cf{background:linear-gradient(180deg,#f7c34a,#e09a18);border:0;color:#241a05;font-weight:700;
+    border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer}
+  button.cf:hover{filter:brightness(1.08)}
+  button.cf.ghost{background:transparent;border:1px solid rgba(255,255,255,.2);color:#ddd;font-weight:500}
+  button.cf.ghost:hover{background:rgba(255,255,255,.08)}
+  button.cf:disabled{opacity:.4;cursor:not-allowed}
+  .cfList{border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden}
+  .cfItem{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+  .cfItem:last-child{border-bottom:0}
+  .cfItem:hover{background:rgba(255,255,255,.05)}
+  .cfItem .nm{flex:1;font-size:14px}
+  .cfItem .meta{font-size:12px;color:#9a9a9a}
+  .cfEmpty{padding:26px;text-align:center;color:#888;font-size:13px}
+  .cfTeams{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .cfTeam{border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
+  .cfTeam h3{margin:0;padding:10px 14px;font-size:14px;letter-spacing:1px;background:rgba(255,255,255,.05)}
+  .cfSlot{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
+  .cfSlot.mine{background:rgba(245,179,33,.12)}
+  .cfSlot .st{margin-left:auto;font-size:11px;color:#999}
+  .cfSlot.empty{color:#8c8c8c;cursor:pointer}
+  .cfSlot.empty:hover{background:rgba(255,255,255,.06);color:#ddd}
+  .cfTag{font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.12)}
+  .cfTag.rdy{background:rgba(61,220,132,.2);color:#7ff0b0}
+  .cfFoot{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid rgba(255,255,255,.08)}
+  .cfTip{font-size:12px;color:#9a9a9a;line-height:1.7}
+  .cfTip.bad{color:#ff9b9b;background:rgba(229,72,77,.1);border:1px solid rgba(229,72,77,.35);
+    border-radius:8px;padding:10px 12px;margin-top:4px}
+  .cfTip code{background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px;color:#f5b321}
+  .cfRankTabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+  .cfRankTabs button.active{background:#f5b321;color:#231909;border-color:#f5b321;font-weight:700}
+  .cfRankTable{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+  .cfRankTable th,.cfRankTable td{padding:9px 10px;text-align:right;border-bottom:1px solid rgba(255,255,255,.08)}
+  .cfRankTable th:nth-child(2),.cfRankTable td:nth-child(2){text-align:left}
+  .cfRankTable th{color:#aaa;font-weight:500}
+  .cfRankTable tr.mine{background:rgba(245,179,33,.12)}
+  .cfRankTable .focus{color:#f5b321;font-weight:700}
+  .cfRankWrap{overflow-x:auto;border:1px solid rgba(255,255,255,.1);border-radius:10px}
+  `;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function el(tag, cls, html) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+
+  function renderOnlineList(panel, room, follow) {
+    panel.innerHTML = '';
+    const players = room.online || [];
+    panel.appendChild(el('div', 'cfOnlineTitle', `在线玩家 · ${players.length}`));
+    const list = el('div', 'cfOnlineList');
+    if (!players.length) list.appendChild(el('div', 'cfOnlineEmpty', '暂无在线玩家'));
+    for (const player of players) {
+      const entry = el('div', 'cfOnlineEntry');
+      const info = el('div', 'cfOnlineInfo');
+      const name = el('div', 'cfOnlineName');
+      name.textContent = player.name;
+      const state = el('div', 'cfOnlineState');
+      state.textContent = player.roomId ? (follow ? `在房间：${player.roomName || '未命名房间'}` : '在房间') : '空闲';
+      info.append(name, state);
+      entry.appendChild(info);
+      if (follow && player.roomId && player.netId !== room.selfId && player.roomId !== room.room?.id) {
+        const button = el('button', 'cf ghost cfOnlineFollow', '跟随');
+        button.title = `尝试加入${player.name}所在的房间`;
+        button.onclick = () => room.join(player.roomId);
+        entry.appendChild(button);
+      }
+      if (follow && room.room && !player.roomId && player.netId !== room.selfId &&
+          room.room.players.length < room.room.size * 2) {
+        const button = el('button', 'cf ghost cfOnlineFollow', '邀请');
+        button.title = `邀请${player.name}加入当前房间`;
+        button.onclick = () => room.invite(player.netId);
+        entry.appendChild(button);
+      }
+      list.appendChild(entry);
+    }
+    panel.appendChild(list);
+  }
+
+  const CFRoomUI = {
+    /**
+     * 挂载房间界面
+     * @param {any} room  CFRoom 实例
+     * @param {{onStart?:Function,onBack?:Function,title?:string}} opts
+     */
+    mount(room, opts) {
+      opts = opts || {};
+
+      if (!document.getElementById('cfMpStyle')) {
+        const style = document.createElement('style');
+        style.id = 'cfMpStyle';
+        style.textContent = CSS;
+        document.head.appendChild(style);
+      }
+
+      let root = document.getElementById('cfMp');
+      if (!root) {
+        root = el('div', 'hidden');
+        root.id = 'cfMp';
+        document.body.appendChild(root);
+      }
+
+      const netOpen = () => !!(room.net && room.net.open);
+      let authUser = null;
+      let authChecking = false;
+      let authMode = 'login';
+      let authEmail = '';
+      let authNotice = '';
+      let registrationSent = false;
+      let leaderboardOpen = false;
+      let rankPeriod = 'all';
+      let rankMetric = 'kills';
+      let rankData = null;
+      let rankError = '';
+      let rankRequestSeq = 0;
+      let inviteStatus = '';
+      let activeInviteId = null;
+      const invitePopup = el('div');
+      invitePopup.id = 'cfInvitePopup';
+      invitePopup.style.display = 'none';
+      document.body.appendChild(invitePopup);
+
+      function dismissInvite(inviteId) {
+        if (inviteId && inviteId !== activeInviteId) return;
+        activeInviteId = null;
+        invitePopup.style.display = 'none';
+        invitePopup.replaceChildren();
+      }
+
+      function showInvite(m) {
+        if (room.room || !m.inviteId) return;
+        dismissInvite();
+        activeInviteId = m.inviteId;
+        const title = el('div', 'title');
+        title.textContent = '房间邀请';
+        const message = el('div', 'message');
+        message.textContent = `${m.fromName} 邀请你加入「${m.roomName}」`;
+        const actions = el('div', 'actions');
+        const decline = el('button', 'cf ghost', '拒绝');
+        const accept = el('button', 'cf', '接受并入房');
+        decline.onclick = () => { room.replyInvite(m.inviteId, false); dismissInvite(m.inviteId); };
+        accept.onclick = () => {
+          room.replyInvite(m.inviteId, true);
+          dismissInvite(m.inviteId);
+          leaderboardOpen = false;
+          root.classList.remove('hidden');
+          render();
+        };
+        actions.append(decline, accept);
+        invitePopup.append(title, message, actions);
+        invitePopup.style.display = 'block';
+      }
+
+      async function loadLeaderboard() {
+        const requestSeq = ++rankRequestSeq;
+        const requestedPeriod = rankPeriod;
+        try {
+          const response = await fetch('/api/leaderboard?period=' + requestedPeriod, {
+            credentials: 'same-origin', headers: CFTabSession.headers(),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '排行榜加载失败');
+          if (rankRequestSeq === requestSeq) { rankData = data; rankError = ''; }
+        } catch (error) { if (rankRequestSeq === requestSeq) rankError = error.message; }
+        finally { if (leaderboardOpen && rankRequestSeq === requestSeq) render(); }
+      }
+
+      async function authRequest(path, body) {
+        const response = await fetch('/api/auth/' + path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { ...CFTabSession.headers(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+          credentials: 'same-origin',
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '请求失败');
+        return data;
+      }
+
+      function showAuthError(message) {
+        const status = root.querySelector('.cfNameStatus');
+        if (status) { status.className = 'cfTip bad cfNameStatus'; status.textContent = message; }
+      }
+
+      async function signOut() {
+        room.net.close();
+        room.name = '';
+        leaderboardOpen = false;
+        try { await authRequest('logout', {}); } catch (_) {}
+        authUser = null;
+        authMode = 'login';
+        render();
+      }
+
+      /* ---------------- 连接页 ---------------- */
+      function renderConnect(body) {
+        if (authChecking) { body.appendChild(el('div', 'cfTip', '正在检查登录状态…')); return; }
+        if (authUser) {
+          body.appendChild(el('div', 'cfTip', `已登录：${esc(authUser.name)}（${esc(authUser.email)}），正在连接联机大厅…`));
+          const retry = el('button', 'cf ghost', '重新连接');
+          retry.onclick = () => room.net.connect();
+          body.appendChild(retry);
+          return;
+        }
+        const mode = authMode;
+        const descriptions = {
+          login: '输入邮箱和密码登录。',
+          register: '填写邮箱、游戏昵称和密码，验证邮箱后创建账号。昵称为 1–12 个字，不能包含空白字符。',
+          forgot: '输入注册邮箱，我们会发送重置密码验证码。',
+          reset: `如邮箱已注册，请查收 ${esc(authEmail)} 的重置验证码，并设置新密码。`,
+        };
+        body.appendChild(el('div', 'cfTip', descriptions[mode]));
+        const row = el('div', 'cfRow');
+        const email = el('input', 'cf'); email.type = 'email'; email.placeholder = '邮箱'; email.autocomplete = 'email'; email.value = authEmail;
+        row.appendChild(email);
+        let name, password, code;
+        if (mode === 'register') {
+          name = el('input', 'cf'); name.placeholder = '游戏昵称'; name.maxLength = 12;
+          row.appendChild(name);
+        }
+        if (mode === 'register' || mode === 'reset') {
+          code = el('input', 'cf'); code.placeholder = '6 位邮箱验证码'; code.inputMode = 'numeric'; code.maxLength = 6;
+          row.appendChild(code);
+        }
+        if (mode === 'login' || mode === 'register' || mode === 'reset') {
+          password = el('input', 'cf'); password.type = 'password';
+          password.placeholder = mode === 'reset' ? '新密码（8–128 位）' : '密码（8–128 位）';
+          password.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+          row.appendChild(password);
+        }
+        const labels = { login: '登录', register: '完成注册', forgot: '发送找回验证码', reset: '重置密码' };
+        let sendButton;
+        if (mode === 'register') {
+          sendButton = el('button', 'cf ghost', registrationSent ? '重新发送验证码' : '发送验证码');
+          row.appendChild(sendButton);
+          if (registrationSent) { email.disabled = true; name.disabled = true; password.disabled = true; }
+        }
+        const btn = el('button', 'cf', labels[mode]);
+        if (mode === 'register') btn.disabled = !registrationSent;
+        row.appendChild(btn);
+        body.appendChild(row);
+        const status = el('div', 'cfTip cfNameStatus', esc(authNotice));
+        body.appendChild(status);
+        const links = el('div', 'cfRow');
+        const switchMode = (next, label) => {
+          const button = el('button', 'cf ghost', label);
+          button.onclick = () => { authEmail = email.value.trim(); authMode = next; authNotice = ''; registrationSent = false; render(); };
+          links.appendChild(button);
+        };
+        if (mode === 'login') { switchMode('register', '注册账号'); switchMode('forgot', '忘记密码'); }
+        else {
+          switchMode('login', '返回登录');
+          if (mode === 'register' && registrationSent) switchMode('register', '修改注册信息');
+          if (mode === 'reset') switchMode('forgot', '重新发送找回验证码');
+        }
+        body.appendChild(links);
+        if (sendButton) sendButton.onclick = async () => {
+          sendButton.disabled = true;
+          authEmail = email.value.trim();
+          status.textContent = '正在发送验证码…';
+          try {
+            await authRequest('register', { email: authEmail, name: name.value, password: password.value });
+            registrationSent = true;
+            email.disabled = true; name.disabled = true; password.disabled = true;
+            btn.disabled = false;
+            sendButton.textContent = '重新发送验证码';
+            status.className = 'cfTip cfNameStatus';
+            status.textContent = '验证码已发送，请查收邮箱并填写上方验证码。';
+          } catch (error) {
+            status.className = 'cfTip bad cfNameStatus';
+            status.textContent = error.message;
+          } finally { sendButton.disabled = false; }
+        };
+        btn.onclick = async () => {
+          btn.disabled = true;
+          authEmail = email.value.trim();
+          status.textContent = '请稍候…';
+          try {
+            if (mode === 'register') {
+              const data = await authRequest('verify-register', { email: authEmail, code: code.value.trim() });
+              authUser = data.account;
+              registrationSent = false;
+              room.name = authUser.name;
+              room.net.connect();
+              render(); return;
+            }
+            if (mode === 'forgot') {
+              await authRequest('forgot-password', { email: authEmail });
+              authMode = 'reset'; authNotice = ''; render(); return;
+            }
+            if (mode === 'reset') {
+              const result = await authRequest('reset-password', { email: authEmail, code: code.value.trim(), password: password.value });
+              authMode = 'login'; authNotice = result.message; render(); return;
+            }
+            const data = await authRequest('login', { email: authEmail, password: password.value });
+            authUser = data.account;
+            authNotice = '';
+            room.name = authUser.name;
+            room.net.connect();
+            render();
+          } catch (error) {
+            status.className = 'cfTip bad cfNameStatus';
+            status.textContent = error.message;
+            btn.disabled = false;
+          }
+        };
+      }
+
+      /* ---------------- 大厅 ---------------- */
+      function renderLobby(body) {
+        const row = el('div', 'cfRow');
+        const nm = el('input', 'cf'); nm.placeholder = '房间名'; nm.value = (room.name || '玩家') + '的房间';
+        const size = el('select', 'cf');
+        [['4', '4v4'], ['5', '5v5'], ['6', '6v6'], ['8', '8v8']].forEach(([v, t]) => {
+          const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === '5') o.selected = true; size.appendChild(o);
+        });
+        const goal = el('select', 'cf');
+        [['30', '目标 30'], ['50', '目标 50'], ['100', '目标 100']].forEach(([v, t]) => {
+          const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === '50') o.selected = true; goal.appendChild(o);
+        });
+        const bots = el('select', 'cf');
+        [['0', '不补 bot'], ['2', '补 2 bot'], ['4', '补 4 bot'], ['6', '补 6 bot']].forEach(([v, t]) => {
+          const o = document.createElement('option'); o.value = v; o.textContent = t; bots.appendChild(o);
+        });
+        const mk = el('button', 'cf', '创建房间');
+        const rf = el('button', 'cf ghost', '刷新');
+        row.append(nm, size, goal, bots, mk, rf);
+        body.appendChild(row);
+        mk.onclick = () => room.create({ name: nm.value.trim() || '运输船房间', size: +size.value, goal: +goal.value, bots: +bots.value, team: 'BL' });
+        rf.onclick = () => room.refresh();
+
+        const list = el('div', 'cfList');
+        const rs = room.rooms || [];
+        if (!rs.length) list.appendChild(el('div', 'cfEmpty', '暂无房间，点「创建房间」开一个'));
+        rs.forEach((r) => {
+          const it = el('div', 'cfItem');
+          it.appendChild(el('div', 'nm', esc(r.name)));
+          it.appendChild(el('div', 'meta', `${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · bot ' + r.bots : ''}`));
+          it.appendChild(el('div', 'meta', r.state === 'playing' ? (r.players.length < r.size * 2 ? '进行中 · 可中途加入' : '进行中 · 已满') : '等待中'));
+          it.onclick = () => room.join(r.id);
+          list.appendChild(it);
+        });
+        body.appendChild(list);
+      }
+
+      /* ---------------- 房间页 ---------------- */
+      function renderRoom(body) {
+        const r = room.room;
+        const me = room.me;
+        const choosingBattle = r.state === 'playing' && !!me?.pendingBattle;
+        const canChangeTeam = r.state === 'lobby' || choosingBattle;
+        body.appendChild(el('div', 'cfRow',
+          `<div class="cfTip"><b style="font-size:14px">${esc(r.name)}</b> · ${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}</div>`));
+
+        const teams = el('div', 'cfTeams');
+        const slots = room.slots();
+        ['BL', 'GR'].forEach((tk) => {
+          const box = el('div', 'cfTeam');
+          box.appendChild(el('h3', null, `${TEAM[tk].name} <span style="color:${TEAM[tk].color};font-size:11px">${TEAM[tk].desc}</span>`));
+          for (let i = 0; i < r.size; i++) {
+            const p = slots[tk][i];
+            const s = el('div', 'cfSlot' + (p ? (p.netId === room.selfId ? ' mine' : '') : ' empty'));
+            if (p) {
+              s.appendChild(el('span', null, esc(p.name)));
+              const tags = el('span', 'st');
+              if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
+              if (p.ready) tags.appendChild(el('span', 'cfTag rdy', '已准备'));
+              if (p.pendingBattle) tags.appendChild(el('span', 'cfTag', '待加入'));
+              if (p.netId === room.selfId && canChangeTeam) {
+                const out = el('span', 'cfTag', '退出阵营');
+                out.style.cursor = 'pointer';
+                out.style.marginLeft = '6px';
+                out.onclick = () => room.setTeam(null);
+                tags.appendChild(out);
+              }
+              s.appendChild(tags);
+            } else {
+              s.appendChild(el('span', null, canChangeTeam ? '空位 · 点击加入' : '空位'));
+              if (canChangeTeam) s.onclick = () => room.setTeam(tk);
+            }
+            box.appendChild(s);
+          }
+          teams.appendChild(box);
+        });
+        body.appendChild(teams);
+
+        const unassigned = r.players.filter((p) => p.pendingBattle && !p.team);
+        if (unassigned.length) {
+          const waiting = el('div', 'cfTip');
+          waiting.textContent = `等待选择阵营：${unassigned.map((p) => p.name).join('、')}`;
+          body.appendChild(waiting);
+        }
+        const full = r.players.length >= r.size * 2;
+        const hasBothTeams = ['BL', 'GR'].every((team) => r.players.some((p) => p.team === team));
+        body.appendChild(el('div', 'cfTip',
+          r.state === 'playing' ? (choosingBattle ? '对局进行中：请先选择有空位的阵营，再点击「加入战斗」。' : '对局进行中。')
+            : !hasBothTeams ? '潜伏者和保卫者阵营都至少需要 1 名玩家才能开始；加入房间会自动分配到人数较少的阵营。'
+                            : full ? '房间已满，房主可以开始对战。'
+                                   : '两边都已有玩家，房主可以开始对战；缺人时按房间配置补 bot。'));
+        if (inviteStatus) body.appendChild(el('div', 'cfTip', esc(inviteStatus)));
+
+        const foot = el('div', 'cfFoot');
+        const btnLeave = el('button', 'cf ghost', '离开房间');
+        btnLeave.onclick = () => { inviteStatus = ''; room.leave(); };
+
+        foot.appendChild(btnLeave);
+        if (choosingBattle) {
+          const joinBattle = el('button', 'cf', '加入战斗');
+          joinBattle.disabled = !me.team;
+          joinBattle.onclick = () => { joinBattle.disabled = true; room.joinBattle(); };
+          foot.appendChild(joinBattle);
+        } else if (r.state === 'lobby') {
+          const btnReady = el('button', 'cf' + (me && me.ready ? ' ghost' : ''), me && me.ready ? '取消准备' : '准备');
+          btnReady.disabled = !me || !me.team;
+          btnReady.onclick = () => room.setReady(!(me && me.ready));
+
+          const btnStart = el('button', 'cf', '开始对战');
+          btnStart.disabled = !(room.isHost && hasBothTeams && !r.players.some((p) => !p.team));
+          btnStart.onclick = () => room.start();
+          foot.append(btnReady, btnStart);
+        }
+        body.appendChild(foot);
+      }
+
+      function renderLeaderboard(body) {
+        const periods = [['all', '历史累计'], ['month', '月榜'], ['week', '周榜'], ['day', '日榜'], ['live', '实时榜']];
+        const metrics = [['kills', '最高击杀'], ['headshots', '最多爆头'], ['kd', '击杀/死亡比'], ['deaths', '最多死亡']];
+        const back = el('button', 'cf ghost', room.room ? '返回房间' : '返回大厅');
+        back.onclick = () => { leaderboardOpen = false; render(); };
+        body.appendChild(el('div', 'cfRow'));
+        body.lastChild.appendChild(back);
+
+        const periodTabs = el('div', 'cfRankTabs');
+        for (const [value, label] of periods) {
+          const button = el('button', 'cf ghost' + (rankPeriod === value ? ' active' : ''), label);
+          button.onclick = () => {
+            if (rankPeriod === value) return;
+            rankPeriod = value; rankData = null; rankError = ''; render(); void loadLeaderboard();
+          };
+          periodTabs.appendChild(button);
+        }
+        body.appendChild(periodTabs);
+        const metricTabs = el('div', 'cfRankTabs');
+        for (const [value, label] of metrics) {
+          const button = el('button', 'cf ghost' + (rankMetric === value ? ' active' : ''), label);
+          button.onclick = () => { rankMetric = value; render(); };
+          metricTabs.appendChild(button);
+        }
+        body.appendChild(metricTabs);
+        const hint = rankPeriod === 'live' ? '实时榜：当前正在进行的对局，每 5 秒刷新；仅统计真人之间的击杀与死亡。'
+          : '统计周期按北京时间计算；仅统计真人之间的击杀与死亡。';
+        body.appendChild(el('div', 'cfTip', hint));
+        if (rankError) { body.appendChild(el('div', 'cfTip bad', esc(rankError))); return; }
+        if (!rankData || rankData.period !== rankPeriod) { body.appendChild(el('div', 'cfEmpty', '正在加载排行榜…')); return; }
+        if (rankData.windowStart) {
+          const start = new Date(rankData.windowStart).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+          body.appendChild(el('div', 'cfTip', `本期从北京时间 ${esc(start)} 开始`));
+        }
+        const rows = rankData.boards[rankMetric] || [];
+        if (!rows.length) { body.appendChild(el('div', 'cfEmpty', '当前榜单还没有战绩')); return; }
+        const wrap = el('div', 'cfRankWrap');
+        const table = el('table', 'cfRankTable');
+        table.innerHTML = '<thead><tr><th>名次</th><th>玩家</th><th>击杀</th><th>爆头</th><th>死亡</th><th>K/D</th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        const focusIndex = { kills: 2, headshots: 3, deaths: 4, kd: 5 }[rankMetric];
+        for (const player of rows) {
+          const tr = el('tr', player.accountId === authUser?.id ? 'mine' : '');
+          const values = [player.rank, esc(player.name), player.kills, player.headshots, player.deaths, Number(player.kd).toFixed(2)];
+          values.forEach((value, index) => tr.appendChild(el('td', index === focusIndex ? 'focus' : '', String(value))));
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        body.appendChild(wrap);
+      }
+
+      /* ---------------- 渲染 ---------------- */
+      // 记录上一次渲染的视图。只有"刚进入大厅"时才主动拉一次房间列表 ——
+      // 否则 list 响应 → render → refresh → list 响应 …… 会无限重建 DOM，
+      // 真实鼠标点击（mousedown/mouseup 之间按钮已被替换）永远触发不了 onclick。
+      let lastView = '';
+
+      function render() {
+        const view = !room.registered ? 'connect' : leaderboardOpen ? 'leaderboard' : (room.room ? 'room' : 'lobby');
+        root.innerHTML = '';
+        const card = el('div', 'cfCard' + (room.registered ? ' hasOnline' : ''));
+
+        const head = el('div', 'cfHead');
+        const dot = el('span', 'dot' + (netOpen() ? ' on' : ''));
+        head.appendChild(dot);
+        head.appendChild(el('h1', null, opts.title || '运输船 · 联机对战'));
+        head.appendChild(el('span', 'sp'));
+        if (authUser) {
+          head.appendChild(el('span', 'cfTip', esc(authUser.name)));
+          if (room.registered) {
+            const leaderboardButton = el('button', 'cf ghost', leaderboardOpen ? '关闭排行' : '排行榜');
+            leaderboardButton.onclick = () => {
+              leaderboardOpen = !leaderboardOpen;
+              rankError = '';
+              render();
+              if (leaderboardOpen) void loadLeaderboard();
+            };
+            head.appendChild(leaderboardButton);
+          }
+          const logout = el('button', 'cf ghost', '退出账号');
+          logout.onclick = signOut;
+          head.appendChild(logout);
+        }
+        head.appendChild(el('span', 'cfTip cfNetStatus', netOpen() ? '已连接 · 延迟 ' + room.net.ping + 'ms' : '未连接'));
+        if (opts.onBack) {
+          const back = el('button', 'cf ghost', '返回主菜单');
+          back.onclick = () => {
+            if (room.room) room.leave();
+            leaderboardOpen = false;
+            root.classList.add('hidden');
+            opts.onBack();
+          };
+          head.appendChild(back);
+        }
+        card.appendChild(head);
+
+        const layout = el('div', room.registered ? 'cfLayout' : '');
+        const body = el('div', 'cfBody');
+        layout.appendChild(body);
+        if (room.registered) {
+          const onlineSide = el('aside', 'cfOnlinePanel');
+          renderOnlineList(onlineSide, room, true);
+          layout.appendChild(onlineSide);
+        }
+        card.appendChild(layout);
+
+        if (view === 'connect') renderConnect(body);
+        else if (view === 'leaderboard') renderLeaderboard(body);
+        else if (view === 'lobby') renderLobby(body);
+        else renderRoom(body);
+
+        root.appendChild(card);
+
+        if (view === 'lobby' && lastView !== 'lobby') room.refresh();
+        lastView = view;
+      }
+
+      room.on('open', render);
+      room.on('close', () => { dismissInvite(); inviteStatus = ''; render(); });
+      room.on('hello', render);
+      room.on('list', render);
+      room.on('room', () => { if (room.room) dismissInvite(); render(); });
+      room.on('invite', showInvite);
+      room.on('invite_cancel', (m) => dismissInvite(m.inviteId));
+      room.on('invite_status', (m) => {
+        const messages = {
+          sent: `已向 ${m.name} 发送邀请`,
+          accepted: `${m.name} 已接受邀请`,
+          declined: `${m.name} 拒绝了邀请`,
+          expired: `发给 ${m.name} 的邀请已过期`,
+        };
+        if (!messages[m.status]) return;
+        inviteStatus = messages[m.status];
+        if (room.room && !root.classList.contains('hidden')) render();
+      });
+      room.on('presence', () => {
+        const onlineSide = root.querySelector('.cfOnlinePanel');
+        if (onlineSide) renderOnlineList(onlineSide, room, true);
+      });
+      room.on('start', (m) => { root.classList.add('hidden'); opts.onStart && opts.onStart(m); });
+      room.on('end', () => { root.classList.remove('hidden'); render(); });
+      room.on('err', (m) => {
+        if (!room.registered) {
+          showAuthError(m.msg || '连接失败');
+        } else { window.alert(m.msg || '出错了'); render(); }
+      });
+
+      // 每秒刷新一次延迟显示
+      setInterval(() => { if (netOpen() && !root.classList.contains('hidden')) { const d = root.querySelector('.cfHead .cfNetStatus'); if (d) d.textContent = '已连接 · 延迟 ' + room.net.ping + 'ms'; } }, 1000);
+      setInterval(() => { if (leaderboardOpen && rankPeriod === 'live' && !root.classList.contains('hidden')) void loadLeaderboard(); }, 5000);
+
+      return {
+        async open() {
+          root.classList.remove('hidden');
+          authChecking = true;
+          render();
+          try {
+            const data = await authRequest('me');
+            if (root.classList.contains('hidden')) return;
+            authUser = data.account;
+            room.name = authUser.name;
+            if (!room.net.open) room.net.connect();
+          } catch (_) { authUser = null; }
+          authChecking = false;
+          render();
+        },
+        close() { root.classList.add('hidden'); },
+        render,
+        root,
+      };
+    },
+
+    /** 在原版菜单「开始游戏」按钮下面插一个入口按钮 */
+    injectMenuButton(text, onClick) {
+      const btn = document.getElementById('btnStart');
+      if (!btn || document.getElementById('btnMp')) return false;
+      const b = document.createElement('button');
+      b.className = 'go';
+      b.id = 'btnMp';
+      b.textContent = text || '联 机 对 战';
+      b.style.cssText = 'margin-top:10px;background:linear-gradient(180deg,#4a4f57,#2c3036);color:#f5f5f5';
+      b.onclick = onClick;
+      btn.insertAdjacentElement('afterend', b);
+      return true;
+    },
+
+    injectMenuOnline(room) {
+      const menu = document.querySelector('#menu .title');
+      if (!menu) return false;
+      let panel = document.getElementById('cfMenuOnline');
+      if (!panel) {
+        panel = el('div', 'cfMenuOnline');
+        panel.id = 'cfMenuOnline';
+        menu.appendChild(panel);
+        room.on('presence', () => renderOnlineList(panel, room, false));
+      }
+      renderOnlineList(panel, room, false);
+      return true;
+    },
+  };
+
+  global.CFRoomUI = CFRoomUI;
+})(window);

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>联机流程测试台 · 运输船</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#ddd;
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+  #app{display:flex;flex-direction:column;align-items:center;padding:24px;gap:14px}
+  h1{font-size:15px;font-weight:600;letter-spacing:1px;margin:0}
+  canvas{background:#0d1116;border:1px solid #2a2f36;border-radius:10px;
+    image-rendering:auto;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  .bar{display:flex;gap:10px;align-items:center;font-size:12px;color:#9aa}
+  .pill{padding:3px 9px;border-radius:20px;background:#1c2128;border:1px solid #2a313a}
+  kbd{background:#222;border:1px solid #3a4148;border-bottom-width:2px;border-radius:4px;padding:1px 6px;font-family:inherit}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>联机流程测试台 —— 开两个标签页就能验证「房间 → 选阵营 → 进入」</h1>
+  <canvas id="cv" width="760" height="420"></canvas>
+  <div class="bar">
+    <span class="pill" id="who">未连接</span>
+    <span class="pill" id="ping">延迟 –</span>
+    <span class="pill" id="cnt">0 人</span>
+    <span><kbd>W A S D</kbd> 移动 · <kbd>J</kbd> 开火 · <kbd>1~4</kbd> 换枪</span>
+  </div>
+</div>
+
+<script src="net.js"></script>
+<script src="room.js"></script>
+<script src="ui.js"></script>
+<script>
+/* =========================================================================
+ *  极简 2D 沙盒：用同样的 net.js / room.js / ui.js 跑一遍完整联机流程。
+ *  游戏里只需要把下面 3 件事换成 3D 版本即可：
+ *    1) sendState() 里上报自己角色状态
+ *    2) 收到 st 时把远端 Ghost 平滑过去
+ *    3) 命中时 sendHit() 上报
+ *
+ *  坐标刻意用「真实地图尺度」：运输船甲板约 90m × 30m，
+ *  世界范围 x∈[-45,45]、z∈[-15,15]（与 game.world 的碰撞体一致）。
+ *  这样服务端那个 ±80 的安全夹取才不会把人"吸"到边界上。
+ * ====================================================================== */
+(function () {
+  'use strict';
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const WEAPONS = ['ak47', 'm4a1', 'mp5', 'awm', 'deagle'];
+  const TEAM_COLOR = { BL: '#ff9b70', GR: '#8cc8ff' };
+
+  /* 世界尺度（米）→ 屏幕像素 */
+  const HX = 45, HZ = 15;
+  const SCALE = Math.min((W - 40) / (HX * 2), (H - 40) / (HZ * 2));
+  const sx = (x) => W / 2 + x * SCALE;
+  const sy = (z) => H / 2 + z * SCALE;
+  const SPEED = 6.5;              // m/s，接近 CF 的跑步速度
+  const SPAWN_X = 38;             // 双方出生点距中心的距离
+
+  const keys = Object.create(null);
+  addEventListener('keydown', (e) => { keys[e.code] = true; });
+  addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  /** 本地玩家（一个非常粗糙的俯视小人） */
+  const me = { x: -SPAWN_X, z: 0, yaw: 0, hp: 100, alive: true, respawnAt: 0, weapon: 'ak47', fireSeq: 0, lastFire: 0 };
+  /** 远端单位 */
+  const remote = new Map();   // netId -> {x,z,yaw,hp,alive,tx,tz,tyaw,fireSeq,...}
+  window.__remoteDebug = remote;   // 供自动化测试读取同步结果
+  window.__me = me;
+
+  const net = new CFNet(defaultUrls());
+  const room = new CFRoom(net);
+
+  const ui = CFRoomUI.mount(room, {
+    title: '联机测试台',
+    onStart: (payload) => {
+      me.x = payload.team === 'BL' ? -SPAWN_X : SPAWN_X;
+      me.z = (Math.random() - 0.5) * 20;
+      me.hp = 100;
+      me.alive = true;
+      running = true;
+      log('对局开始 · 阵营 ' + ({ BL: '潜伏者', GR: '保卫者' })[payload.team]);
+    },
+  });
+  ui.open();
+
+  function defaultUrls() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return [proto + '//' + location.host + '/ws'];
+  }
+
+  function log(s) {
+    const p = document.getElementById('ping');
+    p.title = s;
+    console.log('[testbed]', s);
+  }
+
+  /* ---------------- 远端单位处理 ---------------- */
+  room.on('start', (m) => {
+    remote.clear();
+    for (const p of m.players || []) remote.set(p.netId, mkRemote(p));
+    for (const b of m.bots || []) remote.set(b.netId, mkRemote(b));
+  });
+
+  function mkRemote(info) {
+    return {
+      netId: info.netId, name: info.name, team: info.team,
+      x: info.team === 'BL' ? -SPAWN_X : SPAWN_X, z: (Math.random() - 0.5) * 20,
+      tx: 0, tz: 0, tyaw: 0, hp: 100, alive: false,
+    };
+  }
+
+  room.on('st', (m) => {
+    if (!room.inGame) return;
+    for (const s of m.a || []) {
+      if (s.i === room.selfId) continue;
+      let r = remote.get(s.i);
+      if (!r) { r = mkRemote({ netId: s.i, name: s.i, team: 'BL' }); remote.set(s.i, r); }
+      r.tx = s.p[0]; r.tz = s.p[2]; r.tyaw = s.y; r.hp = s.hp;
+      if (s.al && !r.alive) { r.x = r.tx; r.z = r.tz; r.alive = true; }
+      r.alive = !!s.al;
+    }
+  });
+
+  room.on('hp', (m) => {
+    if (m.i === room.selfId) { me.hp = m.hp; me.flash = 0.25; }
+    else { const r = remote.get(m.i); if (r) r.hp = m.hp; }
+  });
+
+  room.on('kill', (m) => {
+    if (m.v === room.selfId) { me.alive = false; me.respawnAt = performance.now() + 4000; me.deaths = (me.deaths || 0) + 1; }
+    else { const r = remote.get(m.v); if (r) r.alive = false; }
+    const k = m.k === room.selfId ? me : remote.get(m.k);
+    if (k) k.kills = (k.kills || 0) + 1;
+    if (m.score) log(`比分 ${m.score.BL} : ${m.score.GR}`);
+  });
+
+  room.on('spawn', (m) => {
+    const r = remote.get(m.i);
+    if (r) { r.x = m.p[0]; r.z = m.p[2]; r.alive = true; r.hp = 100; }
+  });
+
+  room.on('open', () => { document.getElementById('who').textContent = '已连接'; });
+
+  /* ---------------- 主循环 ---------------- */
+  let running = false;
+  let last = performance.now();
+  let acc = 0;
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (!running) { draw(); return; }
+
+    stepLocal(dt);
+
+    acc += dt * 1000;
+    if (acc >= 50) { acc = 0; sendState(); }
+
+    for (const r of remote.values()) {
+      const k = 1 - Math.exp(-dt * 14);
+      r.x += (r.tx - r.x) * k;
+      r.z += (r.tz - r.z) * k;
+      let d = r.tyaw - r.yaw;
+      d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      r.yaw += d * k;
+    }
+    draw();
+  }
+  requestAnimationFrame(loop);
+
+  function stepLocal(dt) {
+    if (!me.alive) {
+      if (performance.now() >= me.respawnAt) {
+        me.alive = true;
+        me.hp = 100;
+        const team = room.myTeam || 'BL';
+        me.x = team === 'BL' ? -SPAWN_X : SPAWN_X;
+        me.z = (Math.random() - 0.5) * 20;
+        room.sendRespawn([me.x, 0, me.z], me.yaw, me.weapon);
+      }
+      return;
+    }
+    const sp = SPEED * dt;
+    let mx = 0, mz = 0;
+    if (keys.KeyW) mz -= 1;
+    if (keys.KeyS) mz += 1;
+    if (keys.KeyA) mx -= 1;
+    if (keys.KeyD) mx += 1;
+    if (mx || mz) {
+      const l = Math.hypot(mx, mz);
+      me.x += (mx / l) * sp;
+      me.z += (mz / l) * sp;
+      me.yaw = Math.atan2(-mx, -mz);
+    }
+    me.x = Math.max(-HX + 3, Math.min(HX - 3, me.x));
+    me.z = Math.max(-HZ + 2, Math.min(HZ - 2, me.z));
+
+    if (keys.KeyJ && performance.now() - me.lastFire > 110) {
+      me.lastFire = performance.now();
+      me.fireSeq++;
+      // 极简"命中"：距离最近的敌人 4 米内 → 上报命中
+      const t = nearestEnemy(4);
+      if (t) room.sendHit(t.netId, 24, 'chest', me.weapon);
+    }
+    if (keys.Digit1) me.weapon = WEAPONS[0];
+    if (keys.Digit2) me.weapon = WEAPONS[1];
+    if (keys.Digit3) me.weapon = WEAPONS[2];
+    if (keys.Digit4) me.weapon = WEAPONS[3];
+  }
+
+  function nearestEnemy(range) {
+    let best = null, bd = range * range;
+    remote.forEach((r) => {
+      if (!r.alive || r.team === room.myTeam) return;
+      const d = (r.x - me.x) ** 2 + (r.z - me.z) ** 2;
+      if (d < bd) { bd = d; best = r; }
+    });
+    return best;
+  }
+
+  function sendState() {
+    if (!room.inGame) return;
+    room.sendState({
+      p: [r3(me.x), 0, r3(me.z)],
+      y: r3(me.yaw), pi: 0,
+      c: 0, fwd: 0, sp: 0, vy: 0, g: 1,
+      w: me.weapon, r: 0,
+      f: me.fireSeq | 0,
+    });
+    const el = document.getElementById('ping');
+    if (el) el.textContent = '延迟 ' + net.ping + 'ms';
+    const cnt = document.getElementById('cnt');
+    if (cnt) cnt.textContent = ((room.room && room.room.players.length) || 0) + ' 人';
+  }
+
+  const r3 = (v) => Math.round((Number.isFinite(v) ? v : 0) * 1000) / 1000;
+
+  /* ---------------- 绘制 ---------------- */
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#161b22'; ctx.fillRect(0, 0, W, H);
+
+    // 甲板
+    ctx.fillStyle = '#12171d';
+    ctx.fillRect(sx(-HX), sy(-HZ), HX * 2 * SCALE, HZ * 2 * SCALE);
+    ctx.strokeStyle = '#2a333d'; ctx.lineWidth = 2;
+    ctx.strokeRect(sx(-HX), sy(-HZ), HX * 2 * SCALE, HZ * 2 * SCALE);
+
+    // 集装箱（运输船的两个大箱区 + 中间小箱）
+    ctx.fillStyle = '#1b222b';
+    ctx.fillRect(sx(-24), sy(-14), 9 * SCALE, 28 * SCALE);
+    ctx.fillRect(sx(15), sy(-14), 9 * SCALE, 28 * SCALE);
+    ctx.fillRect(sx(-4), sy(-5), 8 * SCALE, 10 * SCALE);
+
+    for (const r of remote.values()) {
+      ctx.globalAlpha = r.alive ? 1 : 0.25;
+      ctx.fillStyle = TEAM_COLOR[r.team] || '#888';
+      ctx.beginPath(); ctx.arc(sx(r.x), sy(r.z), 8, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#cbd5e1'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(r.name, sx(r.x), sy(r.z) - 13);
+      // 血条
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(sx(r.x) - 13, sy(r.z) + 12, 26, 4);
+      ctx.fillStyle = '#e5484d'; ctx.fillRect(sx(r.x) - 13, sy(r.z) + 12, 26 * Math.max(0, r.hp) / 100, 4);
+    }
+
+    // 自己
+    ctx.fillStyle = me.alive ? '#f5b321' : '#555';
+    ctx.beginPath(); ctx.arc(sx(me.x), sy(me.z), 10, 0, 7); ctx.fill();
+    // 朝向线
+    ctx.strokeStyle = '#f5b321'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx(me.x), sy(me.z));
+    ctx.lineTo(sx(me.x) - Math.sin(me.yaw) * 0.45 * SCALE, sy(me.z) - Math.cos(me.yaw) * 0.45 * SCALE);
+    ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('我 · ' + Math.max(0, Math.round(me.hp)), sx(me.x), sy(me.z) + 24);
+  }
+})();
+</script>
+</body>
+</html>
