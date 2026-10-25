@@ -1,0 +1,23 @@
+deploy/stop.sh
+  s_66967b13f26c79::t_d19eb79780ebb0 1-26
+server/leaderboard.js
+  s_66967b13f26c79::t_94eb67f3be1770 1-89
+web/mp.js
+  s_66967b13f26c79::t_493ff77a0c2666 1-673
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5d5b7b86356e0befe301b2fc8595498e5b69436e",
+  "prompts": {},
+  "sessions": {
+    "s_66967b13f26c79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167af-6ab0-79d0-aa0e-d5f1fe6914bd",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
