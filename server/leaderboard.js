@@ -52,7 +52,10 @@ function makeLeaderboard() {
     CREATE INDEX IF NOT EXISTS combat_events_time ON combat_events(happened_at);
     CREATE INDEX IF NOT EXISTS combat_events_killer ON combat_events(killer_id, happened_at);
     CREATE INDEX IF NOT EXISTS combat_events_victim ON combat_events(victim_id, happened_at);`);
-  const insert = db.prepare('INSERT INTO combat_events (happened_at,killer_id,victim_id,headshot) VALUES (?,?,?,?)');
+  const columns = db.prepare('PRAGMA table_info(combat_events)').all().map((column) => column.name);
+  if (!columns.includes('match_id')) db.exec('ALTER TABLE combat_events ADD COLUMN match_id TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS combat_events_match ON combat_events(match_id, killer_id, victim_id)');
+  const insert = db.prepare('INSERT INTO combat_events (happened_at,killer_id,victim_id,headshot,match_id) VALUES (?,?,?,?,?)');
   const historical = db.prepare(`SELECT a.id AS accountId, a.name,
       COALESCE(k.kills,0) AS kills, COALESCE(k.headshots,0) AS headshots,
       COALESCE(d.deaths,0) AS deaths
@@ -62,14 +65,23 @@ function makeLeaderboard() {
     LEFT JOIN (SELECT victim_id,COUNT(*) deaths
       FROM combat_events WHERE happened_at>=? GROUP BY victim_id) d ON d.victim_id=a.id
     WHERE COALESCE(k.kills,0)+COALESCE(d.deaths,0)>0`);
+  const lifetime = db.prepare(`SELECT
+    (SELECT COUNT(*) FROM combat_events WHERE killer_id=?) AS kills,
+    (SELECT COUNT(*) FROM combat_events WHERE victim_id=?) AS deaths`);
   return {
-    recordKill(killerId, victimId, headshot, time = Date.now()) {
-      insert.run(time, killerId, victimId, headshot ? 1 : 0);
+    recordKill(killerId, victimId, headshot, time = Date.now(), matchId = null) {
+      insert.run(time, killerId, victimId, headshot ? 1 : 0, matchId);
     },
     getHistorical(period, time = Date.now()) {
       if (!PERIODS.has(period) || period === 'live') throw new Error('无效的排行榜周期');
       const start = periodStart(period, time);
       return { period, windowStart: start || null, updatedAt: time, boards: boardsFrom(historical.all(start, start)) };
+    },
+    getLifetimeStats(accountId) {
+      const row = lifetime.get(accountId, accountId);
+      const kills = Number(row.kills) || 0;
+      const deaths = Number(row.deaths) || 0;
+      return { kills, deaths, assists: 0, kda: kills / Math.max(deaths, 1) };
     },
     getLive(rooms, time = Date.now()) {
       const rows = [];

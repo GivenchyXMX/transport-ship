@@ -20,6 +20,7 @@
  *    hp     {i,hp,armor,k,w,p}      有人掉血（服务器裁决结果）
  *    kill   {v,k,w,hs,score}        有人被击杀
  *    spawn  {i,team,p,y,w}          有人复活了
+ *    correct {p}                    服务端纠正本地位置
  *    bots   {a:[...]}               房主广播的 bot 快照
  *    end    {score,winner,reason}   对局结束
  * ========================================================================== */
@@ -59,6 +60,7 @@
       net.on('hp',      (m) => this._e('hp', m));
       net.on('kill',    (m) => this._e('kill', m));
       net.on('spawn',   (m) => this._e('spawn', m));
+      net.on('correct', (m) => this._e('correct', m));
       net.on('bots',    (m) => this._e('bots', m));
       net.on('end',     (m) => { this.inGame = false; this._e('end', m); });
       net.on('err',     (m) => { console.warn('[room]', m.msg); this._e('err', m); });
@@ -95,6 +97,9 @@
     /** @param {{p:[x,y,z],y:yaw,pi:pitch,c:0|1,fwd:number,sp:number,vy:number,g:0|1,w:string,r:0|1,f:number}} s */
     sendState(s) { this.net.send({ t: 'st', ...s }); }
     sendHit(victimId, dmg, part, weapon) { this.net.send({ t: 'hit', v: victimId, d: Math.round(dmg), p: part, w: weapon }); }
+    sendShot(direction, weapon, seq) { this.net.send({ t: 'shot', dir: direction, w: weapon, seq }); }
+    sendMelee(heavy) { this.net.send({ t: 'melee', heavy: !!heavy }); }
+    sendGrenade() { this.net.send({ t: 'grenade' }); }
     sendRespawn(pos, yaw, weapon) { this.net.send({ t: 'respawned', p: pos, y: yaw, w: weapon }); }
     sendBots(list) { this.net.send({ t: 'bots', a: list }); }
 

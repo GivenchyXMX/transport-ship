@@ -22,7 +22,11 @@
   const TAB_ID_RE = /^[a-f0-9]{32}$/;
   let tabId = sessionStorage.getItem(TAB_KEY);
   if (!TAB_ID_RE.test(tabId || '')) {
-    tabId = crypto.randomUUID().replace(/-/g, '');
+    // randomUUID() is unavailable on plain HTTP origins such as a LAN IP.
+    // getRandomValues() works there too, and still provides an unpredictable tab ID.
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    tabId = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
     sessionStorage.setItem(TAB_KEY, tabId);
   }
   // ID 只用于选中本标签的 HttpOnly Cookie，不是登录令牌。

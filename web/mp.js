@@ -15,7 +15,7 @@
  *
  *  3) 网络职责划分（这是整个联机最关键的决策）：
  *        位置/朝向/动作  → 各自客户端说了算，服务器只转发（手感最好）
- *        命中判定        → 开枪的那一方判定，上报服务器（他看到的就是他打到的）
+ *        真人命中判定    → 服务端检查弹道、遮挡、射速和弹药
  *        血量/死亡/比分  → 服务器是唯一权威（真人玩家）
  *        bot 的一切      → 房主客户端是权威（因为服务器没有地图和 AI）
  *
@@ -42,6 +42,7 @@
     nextActorId: 1000,
     sendTimer: 0,
     fireSeq: 0,
+    shotSeq: 0,
     lastNotice: '',
   };
 
@@ -50,6 +51,9 @@
   let origKill = null;
   let origDamage = null;
   let origFireWeapon = null;
+  let origTraceBullet = null;
+  let origMelee = null;
+  let origThrowGrenade = null;
   let origSpawnActor = null;
   let origQuitToMenu = null;
 
@@ -132,6 +136,9 @@
     origKill = game.kill.bind(game);
     origDamage = game.damage.bind(game);
     origFireWeapon = game.fireWeapon.bind(game);
+    origTraceBullet = game.traceBullet.bind(game);
+    origMelee = game.melee.bind(game);
+    origThrowGrenade = game.throwGrenade.bind(game);
     origSpawnActor = game.spawnActor.bind(game);
     origQuitToMenu = game.quitToMenu.bind(game);
 
@@ -158,13 +165,14 @@
       if (!shooterIsLocal) return;                  // 别人开的枪：等他上报，本地不处理
 
       if (target === game.player) {
-        // 我自己打到自己（手雷），交给原版
+        // 自己的手雷伤害由服务端计算；房主模拟的 bot 仍沿用本地逻辑。
+        if (attacker === game.player) return;
         return origDamage(target, attacker, dmg, part, weapon, dir, wallbang, melee);
       }
 
       if (target.isGhost) {
-        // 打到远端单位：上报服务器，服务器裁决血量和死亡
-        MP.room.sendHit(target.netId, dmg, part, weapon);
+        // bot 仍由房主裁决；真人的弹道由服务端单独处理。
+        if (target.isBot) MP.room.sendHit(target.netId, dmg, part, weapon);
         return;
       }
 
@@ -180,6 +188,31 @@
         else if (t.netId && !t.isGhost) t.__fireSeq = (t.__fireSeq || 0) + 1;
       }
       return r;
+    };
+
+    // 原版已算出视觉弹道方向，但目标、部位和伤害都不再由页面指定。
+    game.traceBullet = function (shooter, origin, direction, weapon) {
+      if (MP.active && shooter === game.player && MP.room) {
+        sendLoop(); // WebSocket 保序，先把本次开枪位置和视角送到服务端。
+        MP.room.sendShot([direction.x, direction.y, direction.z], weapon.id, ++MP.shotSeq);
+      }
+      return origTraceBullet(shooter, origin, direction, weapon);
+    };
+
+    game.melee = function (actor, heavy) {
+      if (MP.active && actor === game.player && MP.room) {
+        sendLoop();
+        MP.room.sendMelee(heavy);
+      }
+      return origMelee(actor, heavy);
+    };
+
+    game.throwGrenade = function (actor) {
+      if (MP.active && actor === game.player && MP.room) {
+        sendLoop();
+        MP.room.sendGrenade();
+      }
+      return origThrowGrenade(actor);
     };
 
     /* ---- 2.4 spawnActor：我复活了，告诉服务器 ---- */
@@ -232,6 +265,7 @@
     MP.myTeam = payload.team;
     MP.endsAt = payload.endsAt || 0;
     MP.fireSeq = 0;
+    MP.shotSeq = 0;
     MP.ghosts = new Map();
     MP.nextActorId = 1000;
 
@@ -516,6 +550,13 @@
         if (s.i === MP.selfId) continue;
         applyGhostState(s);
       }
+    });
+
+    room.on('correct', (m) => {
+      const player = MP.game?.player;
+      if (!MP.active || !player || !Array.isArray(m.p) || m.p.length !== 3) return;
+      player.pos.set(m.p[0], m.p[1], m.p[2]);
+      player.vel.set(0, 0, 0);
     });
 
     /* ---- 6.2 血量变化（服务器裁决结果） ---- */

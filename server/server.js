@@ -5,13 +5,12 @@
  *  服务器只做三件事：
  *    1. 大厅：房间的创建 / 列表 / 加入 / 选阵营 / 准备 / 开始 / 退出
  *    2. 转发：把每个玩家自己的状态快照（位置、朝向、动作）广播给同房间其他人
- *    3. 裁决：血量、死亡、比分 —— 唯一的权威，客户端只能"上报命中"
+ *    3. 裁决：真人弹道、血量、死亡和比分由服务器判定
  *
- *  为什么这样切分？（典型的 shooter 网络模型：client-authoritative hit detection）
- *    - 位置：谁操作谁说了算（否则本地手感会"黏"），服务器只负责转发与插值。
- *    - 命中：开枪的人在自己的客户端做射线检测（他看到的就是他打到的），
- *           然后把「我打中了谁、多少伤害」上报，服务器校验后扣血。
- *           这样在 100ms 延迟下也不用"预判别人的位置"，手感最好。
+ *    - 位置：客户端预测并上报，服务端检查速度和地图穿越。
+ *    - 真人命中：客户端发送射击方向；服务端检查武器、弹药、射速、
+ *      地图遮挡和短时间历史位置，再计算部位与伤害。
+ *    - bot：仍由房主客户端模拟，不作为可靠的军衔经验来源。
  *    - 血量/死亡/比分：全部由服务器裁决，避免两个客户端各算一套导致分叉。
  *
  *  运行：cd server && npm i && npm start   →  http://localhost:8787
@@ -24,6 +23,8 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { makeAuth } = require('./auth');
 const { makeLeaderboard, PERIODS } = require('./leaderboard');
+const { makeRank } = require('./rank');
+const combat = require('./combat');
 
 /* ------------------------------- 常量 ------------------------------------ */
 const PORT       = Number(process.env.PORT || 8787);
@@ -37,7 +38,6 @@ const PROTECT_MS = 3000;               // 复活保护，和游戏内 spawn() �
 const MATCH_MS   = 600 * 1000;         // 单局时长，和游戏内 timeLeft=600 一致
 const MIN_JOIN_MS = 5000;              // 剩余时间太短时不再接受中途加入
 const INVITE_MS = 30000;               // 邀请 30 秒后自动失效
-const MAX_HPS    = 15;                 // 单人每秒最多上报多少次命中（超过就丢弃，防刷）
 const TEAMS      = ['BL', 'GR'];       // BL=潜伏者  GR=保卫者
 const TEAM_NAME  = { BL: '潜伏者', GR: '保卫者' };
 const WEAPONS    = new Set(['ak47', 'm4a1', 'awm', 'mp5', 'deagle', 'knife', 'he']);
@@ -48,6 +48,7 @@ const PUBLIC_FILES = new Set([
 ]);
 const auth = makeAuth();
 const leaderboard = makeLeaderboard();
+const rank = makeRank();
 const COOKIE_PREFIX = 'ship_session_';
 const COOKIE_SECURE = process.env.PUBLIC_ORIGIN?.startsWith('https://') || false;
 const TAB_ID_RE = /^[a-f0-9]{32}$/;
@@ -221,6 +222,7 @@ function roomBrief(room) {
     players: [...room.players.values()].map((p) => ({
       netId: p.netId, name: p.name, team: p.team, ready: p.ready,
       pendingBattle: !!p.pendingBattle,
+      rank: rank.getProfile(p.accountId).name,
     })),
   };
 }
@@ -229,6 +231,7 @@ function playerBrief(player) {
   return {
     netId: player.netId, name: player.name, team: player.team,
     primary: player.primary || 'ak47', isBot: false,
+    rank: rank.getProfile(player.accountId).name,
     stats: player.roundStats ? { ...player.roundStats } : null,
   };
 }
@@ -284,6 +287,7 @@ function createRoom(cfg) {
     botState: [],
     score: { BL: 0, GR: 0 },
     endsAt: 0,
+    match: null,
   };
   rooms.set(id, room);
   buildBots(room);
@@ -326,6 +330,7 @@ function joinRoom(player, room, team) {
 function leaveRoom(player) {
   const room = player.room;
   const wasInBattle = !player.pendingBattle;
+  if (room?.state === 'playing') rank.left(room.match, player);
   player.room = null;
   player.team = null;
   player.ready = false;
@@ -342,6 +347,7 @@ function leaveRoom(player) {
   broadcastPresence();
 
   if (room.players.size === 0) {
+    if (room.state === 'playing') endMatch(room, 'empty');
     rooms.delete(room.id);
     sendRoomListToLobbyIdle();
     return;
@@ -362,16 +368,18 @@ function sendRoomListToLobbyIdle() {
 
 /* ------------------------------ 对局 ------------------------------------- */
 function startMatch(room) {
+  const t0 = now();
+  room.match = rank.createMatch(room, t0);
   room.state = 'playing';
   room.score = { BL: 0, GR: 0 };
   room.endsAt = now() + MATCH_MS;
   room.botState = [];
+  room.grenades = [];
 
   const players = [...room.players.values()];
   const bots = [...room.botActors.values()];
   for (const bot of bots) bot.stats = { kills: 0, headshots: 0, deaths: 0 };
 
-  const t0 = now();
   for (const p of players) {
     p.ready = false;
     p.matchStats = { kills: 0, headshots: 0, deaths: 0 };
@@ -384,6 +392,7 @@ function startMatch(room) {
     p.last = null;
     p.respawnAt = 0;
     p.protectUntil = 0;
+    p.combat = null;
   }
   const roster = players.map(playerBrief);
   for (const p of players) {
@@ -392,6 +401,7 @@ function startMatch(room) {
     send(p.ws, {
       t: 'start',
       roomId: room.id,
+      matchId: room.match.id,
       selfId: p.netId,
       host: room.host,
       team: myTeam,
@@ -413,80 +423,228 @@ function endMatch(room, reason) {
   room.state = 'lobby';
   const { BL, GR } = room.score;
   const winner = BL === GR ? null : BL > GR ? 'BL' : 'GR';
-  broadcast(room, { t: 'end', score: { BL, GR }, winner, teamName: winner ? TEAM_NAME[winner] : null, reason: reason || 'time' });
+  let settlements = null;
+  try { settlements = rank.finish(room.match, room, reason || 'time', winner); }
+  catch (error) { console.error('[rank] 结算失败:', error); }
+  for (const p of room.players.values()) send(p.ws, { t: 'end', score: { BL, GR }, winner,
+    teamName: winner ? TEAM_NAME[winner] : null, reason: reason || 'time', matchId: room.match?.id,
+    settlement: settlements ? settlements[p.accountId] || null : null,
+    settlementError: !settlements });
+  room.match = null;
   for (const p of room.players.values()) { p.ready = false; p.pendingBattle = false; }
   broadcast(room, { t: 'room', room: roomBrief(room) });
   sendRoomListToLobbyIdle();
 }
 
-/**
- * 处理一次命中上报（服务器裁决）
- * @returns {boolean} 是否生效
- */
-function applyHit(room, attacker, msg) {
-  if (room.state !== 'playing' || !attacker || !attacker.alive || attacker.pendingBattle) return false;
+function resetCombat(player, t) {
+  player.combat = {
+    weapons: Object.fromEntries(Object.entries(combat.WEAPONS).map(([id, def]) =>
+      [id, { mag: def.mag, reserve: def.reserve, reloadAt: 0, firedAt: 0 }])),
+    weapon: player.primary,
+    switchedAt: t,
+    shotSeq: 0,
+    meleeAt: 0,
+    grenadeLeft: 1,
+    history: [],
+    movedAt: t,
+  };
+}
 
-  const victimId = String(msg.v || '');
-  const victim = room.players.get(victimId) || room.botActors.get(victimId);
-  if (!victim) return false;
+function rememberPosition(player, t) {
+  if (!player.combat || !player.last?.p) return;
+  const history = player.combat.history;
+  history.push({ t, p: [...player.last.p], crouch: !!player.last.c });
+  while (history.length > 8 || (history[0] && t - history[0].t > 350)) history.shift();
+}
 
-  // 阵营：不能打自己人；bot 由服务器补位，也是敌方单位
-  if (victim.team === attacker.team) return false;
+function positionAt(player, t) {
+  const history = player.combat?.history;
+  if (!history?.length) return player.last && { p: player.last.p, crouch: !!player.last.c };
+  for (let i = history.length - 1; i >= 0; i--) if (history[i].t <= t) return history[i];
+  return history[0];
+}
 
-  const t = now();
+function finishReload(player, weapon, t) {
+  const state = player.combat?.weapons[weapon];
+  const def = combat.WEAPONS[weapon];
+  if (!state || !def || !state.reloadAt || t < state.reloadAt) return;
+  const count = Math.min(def.mag - state.mag, state.reserve);
+  state.mag += count;
+  state.reserve -= count;
+  state.reloadAt = 0;
+}
 
-  // 限流（无论目标是人还是 bot，先挡一道刷伤害）
-  const hits = attacker.hitTimes || (attacker.hitTimes = []);
-  while (hits.length && t - hits[0] > 1000) hits.shift();
-  if (hits.length >= MAX_HPS) return false;
-  hits.push(t);
-
-  // 伤害白名单校验
-  const dmg = clamp(num(msg.d, 0), 0, 200);
-  const weapon = WEAPONS.has(msg.w) ? msg.w : 'ak47';
-  const part = ['head', 'chest', 'leg'].includes(msg.p) ? msg.p : 'chest';
-
-  // bot 由房主客户端裁决（服务器没有地图和 AI），这里只负责转发
-  if (victim.isBot) {
-    const host = room.players.get(room.host);
-    if (host) send(host.ws, { t: 'hit', v: victimId, d: dmg, p: part, w: weapon, k: attacker.netId });
-    return true;
+function applyDamage(room, attacker, victim, damage, part, weapon, t) {
+  if (!victim.alive || t < victim.protectUntil || victim.team === attacker.team && victim !== attacker) return;
+  const penetration = combat.WEAPONS[weapon]?.armorPen ?? .75;
+  let hpDamage = damage;
+  if (victim.armor > 0 && part !== 'leg') {
+    hpDamage *= penetration;
+    victim.armor = Math.max(0, victim.armor - damage * (1 - penetration) * 1.4);
   }
-
-  if (victim.alive === false || t < (victim.protectUntil || 0)) return false;
-
-  victim.hp = Math.max(0, (victim.hp ?? 100) - dmg);
-  victim.armor = victim.armor ?? 100;
-
-  broadcast(room, { t: 'hp', i: victim.netId, hp: Math.round(victim.hp), armor: Math.round(victim.armor), k: attacker.netId, w: weapon, p: part });
-
-  if (victim.hp <= 0) {
-    victim.alive = false;
-    victim.respawnAt = t + RESPAWN_MS;
+  victim.hp = Math.max(0, victim.hp - hpDamage);
+  broadcast(room, { t: 'hp', i: victim.netId, hp: Math.round(victim.hp),
+    armor: Math.round(victim.armor), k: attacker.netId, w: weapon, p: part });
+  if (victim.hp > 0) return;
+  victim.alive = false;
+  victim.respawnAt = t + RESPAWN_MS;
+  victim.roundStats.deaths++;
+  const credited = victim !== attacker;
+  if (credited) {
     attacker.roundStats.kills++;
     if (part === 'head') attacker.roundStats.headshots++;
-    victim.roundStats.deaths++;
-    if (attacker.accountId && victim.accountId) {
-      attacker.matchStats.kills++;
-      if (part === 'head') attacker.matchStats.headshots++;
-      victim.matchStats.deaths++;
-      try { leaderboard.recordKill(attacker.accountId, victim.accountId, part === 'head', t); }
-      catch (error) { console.error('[leaderboard] 战绩保存失败:', error); }
+  }
+  if (credited && attacker.accountId && victim.accountId) {
+    attacker.matchStats.kills++;
+    if (part === 'head') attacker.matchStats.headshots++;
+    victim.matchStats.deaths++;
+    try { leaderboard.recordKill(attacker.accountId, victim.accountId, part === 'head', t, room.match?.id); }
+    catch (error) { console.error('[leaderboard] 战绩保存失败:', error); }
+  } else if (victim.accountId) victim.matchStats.deaths++;
+  if (credited) room.score[attacker.team]++;
+  broadcast(room, { t: 'kill', v: victim.netId, k: credited ? attacker.netId : null,
+    w: weapon, hs: part === 'head', score: { ...room.score } });
+  if (room.score.BL >= room.goal || room.score.GR >= room.goal)
+    setTimeout(() => endMatch(room, 'goal'), 1200);
+}
+
+// Legacy hit packets are accepted only for bots. No client-supplied hit packet
+// can change a human player's HP or persisted combat statistics.
+function applyBotHit(room, attacker, msg) {
+  if (!attacker.alive || attacker.pendingBattle) return;
+  const victim = room.botActors.get(String(msg.v || ''));
+  if (!victim || victim.team === attacker.team) return;
+  const t = now();
+  const hits = attacker.hitTimes || (attacker.hitTimes = []);
+  while (hits.length && t - hits[0] > 1000) hits.shift();
+  if (hits.length >= 15) return;
+  hits.push(t);
+  const host = room.players.get(room.host);
+  if (host) send(host.ws, { t: 'hit', v: victim.netId, d: clamp(num(msg.d, 0), 0, 200),
+    p: ['head', 'chest', 'leg'].includes(msg.p) ? msg.p : 'chest',
+    w: WEAPONS.has(msg.w) ? msg.w : 'ak47', k: attacker.netId });
+}
+
+function applyShot(room, attacker, msg) {
+  if (!attacker.alive || attacker.pendingBattle || !attacker.last || !attacker.combat) return;
+  const t = now();
+  const weapon = String(msg.w || '');
+  const def = combat.WEAPONS[weapon];
+  const direction = combat.unitDirection(msg.dir);
+  if (!def || !direction || attacker.last.w !== weapon || attacker.last.r) return;
+  if (!Number.isSafeInteger(msg.seq) || msg.seq <= attacker.combat.shotSeq) return;
+  attacker.combat.shotSeq = msg.seq;
+  const state = attacker.combat.weapons[weapon];
+  finishReload(attacker, weapon, t);
+  if (state.reloadAt || state.mag < 1 || t - attacker.combat.switchedAt < 250
+      || t - state.firedAt < 60000 / def.rpm * .85) return;
+  const aim = combat.aimDirection(attacker.last.y, attacker.last.pi);
+  // Recoil may offset the visual bullet from the reported body angles.
+  if (aim[0] * direction[0] + aim[1] * direction[1] + aim[2] * direction[2]
+      < Math.cos(def.spread + .13)) return;
+  state.firedAt = t;
+  state.mag--;
+
+  const origin = [attacker.last.p[0], attacker.last.p[1] + (attacker.last.c ? 1.05 : 1.62), attacker.last.p[2]];
+  const wall = combat.wallDistance(origin, direction, def.range);
+  const rewind = Math.min(160, Math.max(40, (attacker.rtt || 0) / 2 + 50));
+  let best = null;
+  for (const victim of room.players.values()) {
+    if (victim === attacker || victim.team === attacker.team || !victim.alive || victim.pendingBattle || t < victim.protectUntil) continue;
+    const stateAtShot = positionAt(victim, t - rewind);
+    if (!stateAtShot) continue;
+    const hit = combat.targetHit(origin, direction, stateAtShot.p, stateAtShot.crouch, Math.min(def.range, wall));
+    if (hit && (!best || hit.distance < best.hit.distance)) best = { victim, hit };
+  }
+  if (!best) return;
+  const { victim, hit } = best;
+  const multiplier = hit.part === 'head' ? def.head : hit.part === 'leg' ? def.limb : 1;
+  const damage = def.damage * Math.pow(def.falloff, hit.distance / 10) * multiplier;
+  applyDamage(room, attacker, victim, damage, hit.part, weapon, t);
+}
+
+function applyMelee(room, attacker, msg) {
+  if (!attacker.alive || !attacker.last || !attacker.combat || attacker.last.w !== 'knife') return;
+  const t = now();
+  const heavy = msg.heavy === true;
+  const interval = heavy ? 1050 : 420;
+  if (t - attacker.combat.switchedAt < 250 || t - attacker.combat.meleeAt < interval * .85) return;
+  attacker.combat.meleeAt = t;
+  const origin = [attacker.last.p[0], attacker.last.p[1] + (attacker.last.c ? 1.05 : 1.62), attacker.last.p[2]];
+  const yaw = attacker.last.y, pitch = attacker.last.pi;
+  const range = heavy ? 1.6 : 1.9;
+  const state = attacker.combat;
+  setTimeout(() => {
+    if (room.state !== 'playing' || !attacker.alive || attacker.room !== room || attacker.combat !== state) return;
+    let best = null;
+    for (const offset of [0, .12, -.12, .24, -.24]) {
+      const direction = combat.aimDirection(yaw + offset, pitch);
+      const wall = combat.wallDistance(origin, direction, range);
+      for (const victim of room.players.values()) {
+        if (victim === attacker || victim.team === attacker.team || !victim.alive || !victim.last || now() < victim.protectUntil) continue;
+        const hit = combat.targetHit(origin, direction, victim.last.p, !!victim.last.c, Math.min(range, wall));
+        if (hit && (!best || hit.distance < best.hit.distance)) best = { victim, hit };
+      }
+      if (best) break;
     }
-    if (victim.team === 'BL' || victim.team === 'GR') room.score[victim.team === 'BL' ? 'GR' : 'BL']++;
-    broadcast(room, {
-      t: 'kill',
-      v: victim.netId,
-      k: attacker.netId,
-      w: weapon,
-      hs: part === 'head',
-      score: { ...room.score },
-    });
-    if (room.score.BL >= room.goal || room.score.GR >= room.goal) {
-      setTimeout(() => endMatch(room, 'goal'), 1200);
+    if (best) applyDamage(room, attacker, best.victim, (heavy ? 100 : 52) * (best.hit.part === 'head' ? 1.3 : 1),
+      best.hit.part, 'knife', now());
+  }, heavy ? 330 : 100);
+}
+
+function throwGrenade(room, attacker) {
+  if (!attacker.alive || !attacker.last || attacker.last.w !== 'he'
+      || !attacker.combat || attacker.combat.grenadeLeft < 1) return;
+  const t = now();
+  if (t - attacker.combat.switchedAt < 250) return;
+  attacker.combat.grenadeLeft--;
+  const { p, y, pi, c } = attacker.last;
+  const direction = combat.aimDirection(y, pi);
+  room.grenades.push({ owner: attacker, p: [p[0] + direction[0] * .5 + Math.cos(y) * .12,
+    p[1] + (c ? 1.05 : 1.62) + direction[1] * .5, p[2] + direction[2] * .5 - Math.sin(y) * .12],
+    v: [direction[0] * 16, direction[1] * 16 + 2.8, direction[2] * 16],
+    at: t, fuseAt: t + 2600 });
+}
+
+function updateGrenades(room, t) {
+  const remaining = [];
+  for (const nade of room.grenades || []) {
+    const elapsed = Math.min(.1, Math.max(0, (t - nade.at) / 1000));
+    nade.at = t;
+    const steps = Math.max(1, Math.ceil(elapsed / .02));
+    const dt = elapsed / steps;
+    for (let i = 0; i < steps; i++) {
+      nade.v[1] -= 14 * dt;
+      const displacement = nade.v.map((v) => v * dt);
+      const length = Math.hypot(...displacement);
+      if (length > 0) {
+        const direction = displacement.map((v) => v / length);
+        if (combat.wallDistance(nade.p, direction, length + .07) < length + .07) {
+          nade.v = nade.v.map((v) => -v * .45);
+        } else for (let axis = 0; axis < 3; axis++) nade.p[axis] += displacement[axis];
+      }
+      if (nade.p[1] < .1) {
+        nade.p[1] = .1;
+        nade.v[1] = Math.abs(nade.v[1]) * .45;
+        nade.v[0] *= .7; nade.v[2] *= .7;
+      }
+    }
+    if (t < nade.fuseAt) { remaining.push(nade); continue; }
+    const owner = nade.owner;
+    if (owner.room !== room) continue;
+    for (const victim of room.players.values()) {
+      if (!victim.alive || !victim.last || victim.team === owner.team && victim !== owner) continue;
+      const target = victim.last.p;
+      const chest = [target[0], target[1] + (victim.last.c ? .47 : 1.02), target[2]];
+      const distance = Math.hypot(chest[0] - nade.p[0], chest[1] - nade.p[1], chest[2] - nade.p[2]);
+      if (distance > 7.5 || distance < 1e-5) continue;
+      const direction = chest.map((v, i) => (v - nade.p[i]) / distance);
+      const blocked = combat.wallDistance(nade.p, direction, distance - .3) < distance - .3;
+      const damage = 115 * Math.pow(1 - distance / 7.5, 1.1) * (blocked ? .2 : 1);
+      if (damage > 1) applyDamage(room, owner, victim, damage, 'chest', 'he', t);
     }
   }
-  return true;
+  room.grenades = remaining;
 }
 
 /** 客户端在自己游戏里复活后上报，服务器确认并广播给别人 */
@@ -495,16 +653,27 @@ function handleRespawn(room, player, msg) {
   const t = now();
   if (player.alive && !player.joining) return;
   if (t < (player.respawnAt || 0) - 800) return; // 还没到复活时间，忽略（防提前复活）
+  const claimed = Array.isArray(msg.p) && msg.p.length === 3 && msg.p.every(Number.isFinite) ? msg.p : null;
+  const spawns = combat.SPAWNS[player.team];
+  if (!claimed || !spawns) return;
+  const nearest = spawns.reduce((best, point) =>
+    Math.hypot(point[0] - claimed[0], point[2] - claimed[2]) < Math.hypot(best[0] - claimed[0], best[2] - claimed[2]) ? point : best);
+  const position = Math.hypot(nearest[0] - claimed[0], nearest[2] - claimed[2]) <= .7
+    && Math.abs(claimed[1] - nearest[1]) <= .6 ? claimed : nearest;
+  if (combat.PRIMARY.has(msg.w)) player.primary = msg.w;
+  const weapon = player.primary;
   player.hp = 100;
   player.armor = 100;
   player.alive = true;
   player.joining = false;
   player.respawnAt = 0;
   player.protectUntil = t + PROTECT_MS;
-  const position = [num(msg.p?.[0]), num(msg.p?.[1]), num(msg.p?.[2])];
-  const weapon = WEAPONS.has(msg.w) ? msg.w : 'ak47';
+  rank.spawned(room.match, player, t);
+  resetCombat(player, t);
   player.last = { ...player.last, p: position, y: num(msg.y), pi: 0, c: 0,
     fwd: 0, sp: 0, vy: 0, g: 1, w: weapon, r: 0, f: player.last?.f || 0 };
+  rememberPosition(player, t);
+  send(player.ws, { t: 'correct', p: position });
   broadcast(room, {
     t: 'spawn',
     i: player.netId,
@@ -520,6 +689,7 @@ function tick() {
   const t = now();
   for (const room of rooms.values()) {
     if (room.state !== 'playing') continue;
+    updateGrenades(room, t);
 
     // 1) 广播所有人的状态（位置/朝向/动作来自本人上报，血量/存活来自服务器裁决）
     const list = [];
@@ -569,6 +739,24 @@ const server = http.createServer((req, res) => {
     if (!PERIODS.has(period)) { json(res, 400, { error: '排行榜周期无效' }); return; }
     try { json(res, 200, period === 'live' ? leaderboard.getLive(rooms) : leaderboard.getHistorical(period)); }
     catch (error) { console.error('[leaderboard]', error); json(res, 500, { error: '排行榜读取失败' }); }
+    return;
+  }
+  if (rel === '/api/rank/me' || rel === '/api/rank/settlements') {
+    if (req.method !== 'GET') { json(res, 405, { error: '方法不允许' }); return; }
+    const account = sameOrigin(req) && auth.current(tokenFromCookie(req, tabIdFromHeader(req)));
+    if (!account) { json(res, 401, { error: '请先登录' }); return; }
+    try {
+      if (rel === '/api/rank/me') json(res, 200, {
+        account: { name: account.name, email: account.email },
+        profile: rank.getProfile(account.id),
+        stats: { ...leaderboard.getLifetimeStats(account.id), playSeconds: rank.getLifetimeSeconds(account.id) },
+        xpEnabled: process.env.RANK_XP_ENABLED !== '0',
+      });
+      else {
+        const limit = Number(new URL(req.url, 'http://localhost').searchParams.get('limit') || 20);
+        json(res, 200, { settlements: rank.getSettlements(account.id, Number.isInteger(limit) ? limit : 20) });
+      }
+    } catch (error) { console.error('[rank]', error); json(res, 500, { error: '军衔数据读取失败' }); }
     return;
   }
 
@@ -641,7 +829,10 @@ wss.on('connection', (ws, req, account, tabId) => {
     handle(player, msg);
   });
 
-  ws.on('pong', () => { player.lastPong = now(); });
+  ws.on('pong', () => {
+    player.lastPong = now();
+    if (player.pingAt) player.rtt = Math.min(500, player.lastPong - player.pingAt);
+  });
 
   ws.on('close', () => { pendingInvites.delete(player.netId); clients.delete(ws); leaveRoom(player); broadcastPresence(); });
   ws.on('error', () => { try { ws.close(); } catch (_) {} });
@@ -778,6 +969,7 @@ function handle(player, msg) {
         send(player.ws, { t: 'err', msg: '对局即将结束，请等待下一局' }); return;
       }
       player.pendingBattle = false;
+      rank.enter(room.match, player);
       player.matchStats = { kills: 0, headshots: 0, deaths: 0 };
       player.roundStats = { kills: 0, headshots: 0, deaths: 0 };
       player.hp = 100;
@@ -794,6 +986,7 @@ function handle(player, msg) {
       send(player.ws, {
         t: 'start', late: true,
         roomId: room.id, selfId: player.netId, host: room.host, team: player.team,
+        matchId: room.match?.id,
         size: room.size, goal: room.goal, duration: Math.max(0, (room.endsAt - joinedAt) / 1000),
         serverTime: joinedAt, endsAt: room.endsAt, score: { ...room.score },
         players: activePlayers.map(playerBrief),
@@ -823,7 +1016,8 @@ function handle(player, msg) {
         return;
       }
       log(`房间 ${room.id} 开始对战，${room.players.size} 人 + ${room.bots} bot`);
-      startMatch(room);
+      try { startMatch(room); }
+      catch (error) { console.error('[rank] 对局创建失败:', error); send(player.ws, { t: 'err', msg: '比赛记录创建失败，请稍后再试' }); }
       return;
     }
 
@@ -834,26 +1028,80 @@ function handle(player, msg) {
 
     /* ---------------- 对局中 ---------------- */
     case 'st': {
-      if (!room || room.state !== 'playing' || player.pendingBattle) return;
+      if (!room || room.state !== 'playing' || player.pendingBattle || !player.alive || !player.combat) return;
+      const t = now();
+      if (!Array.isArray(msg.p) || msg.p.length !== 3 || !msg.p.every(Number.isFinite)
+          || !Number.isFinite(msg.y) || !Number.isFinite(msg.pi)) return;
+      const p = msg.p;
+      if (Math.abs(p[0]) > 36.5 || p[1] < -.5 || p[1] > 8 || Math.abs(p[2]) > 12.4) return;
+      const old = player.last?.p;
+      if (old) {
+        const dt = Math.min(.25, Math.max(0, (t - player.combat.movedAt) / 1000));
+        const horizontal = Math.hypot(p[0] - old[0], p[2] - old[2]);
+        const vertical = Math.abs(p[1] - old[1]);
+        if (horizontal > 12 * dt + .45 || vertical > 17 * dt + .65) {
+          send(player.ws, { t: 'correct', p: old });
+          return;
+        }
+        const distance = Math.hypot(p[0] - old[0], p[1] - old[1], p[2] - old[2]);
+        if (distance > .02) {
+          const origin = [old[0], old[1] + .9, old[2]];
+          const direction = [(p[0] - old[0]) / distance, (p[1] - old[1]) / distance,
+            (p[2] - old[2]) / distance];
+          if (combat.wallDistance(origin, direction, distance) < distance - .015) {
+            send(player.ws, { t: 'correct', p: old });
+            return;
+          }
+        }
+      }
+      const weapon = WEAPONS.has(msg.w) &&
+        (!combat.PRIMARY.has(msg.w) || msg.w === player.primary) ? msg.w : player.primary;
+      if (weapon !== player.combat.weapon) {
+        player.combat.weapon = weapon;
+        player.combat.switchedAt = t;
+      }
+      finishReload(player, weapon, t);
+      const ammo = player.combat.weapons[weapon];
+      if (msg.r && ammo && !ammo.reloadAt && ammo.mag < combat.WEAPONS[weapon].mag && ammo.reserve > 0)
+        ammo.reloadAt = t + combat.WEAPONS[weapon].reload;
       const s = player.last || (player.last = {});
-      const p = Array.isArray(msg.p) ? msg.p : [0, 0, 0];
-      s.p   = [clamp(num(p[0]), -80, 80), clamp(num(p[1]), -20, 80), clamp(num(p[2]), -80, 80)];
-      s.y   = num(msg.y);
-      s.pi  = clamp(num(msg.pi), -1.6, 1.6);
+      s.p   = [...p];
+      s.y   = Math.atan2(Math.sin(msg.y), Math.cos(msg.y));
+      s.pi  = clamp(msg.pi, -1.6, 1.6);
       s.c   = msg.c ? 1 : 0;
       s.fwd = clamp(num(msg.fwd), -2, 2);
       s.sp  = clamp(num(msg.sp), 0, 20);
       s.vy  = clamp(num(msg.vy), -60, 60);
       s.g   = msg.g ? 1 : 0;
-      s.w   = WEAPONS.has(msg.w) ? msg.w : 'ak47';
-      s.r   = msg.r ? 1 : 0;
+      s.w   = weapon;
+      s.r   = ammo?.reloadAt ? 1 : 0;
       s.f   = num(msg.f) | 0;         // 开火序号，用于远端播放枪声/枪口火焰
+      player.combat.movedAt = t;
+      rememberPosition(player, t);
       return;
     }
 
     case 'hit': {
       if (!room || room.state !== 'playing') return;
-      applyHit(room, player, msg);
+      applyBotHit(room, player, msg);
+      return;
+    }
+
+    case 'shot': {
+      if (!room || room.state !== 'playing') return;
+      applyShot(room, player, msg);
+      return;
+    }
+
+    case 'melee': {
+      if (!room || room.state !== 'playing') return;
+      applyMelee(room, player, msg);
+      return;
+    }
+
+    case 'grenade': {
+      if (!room || room.state !== 'playing') return;
+      throwGrenade(room, player);
       return;
     }
 
@@ -950,6 +1198,6 @@ setInterval(() => {
       player.ws.terminate();
       continue;
     }
-    try { player.ws.ping(); } catch (_) { player.ws.terminate(); }
+    try { player.pingAt = t; player.ws.ping(); } catch (_) { player.ws.terminate(); }
   }
 }, HEARTBEAT_MS);

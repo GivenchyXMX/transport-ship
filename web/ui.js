@@ -88,6 +88,16 @@
   .cfRankTable tr.mine{background:rgba(245,179,33,.12)}
   .cfRankTable .focus{color:#f5b321;font-weight:700}
   .cfRankWrap{overflow-x:auto;border:1px solid rgba(255,255,255,.1);border-radius:10px}
+  .cfXpCard{border:1px solid rgba(245,179,33,.28);background:rgba(245,179,33,.07);border-radius:10px;padding:14px;margin-bottom:14px}
+  .cfXpTitle{color:#f5c76d;font-size:15px;font-weight:700;margin-bottom:6px}
+  .cfXpTrack{height:7px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden;margin:10px 0 6px}
+  .cfXpTrack span{display:block;height:100%;background:#f5b321}
+  .cfXpHistory{border-top:1px solid rgba(255,255,255,.08);padding:10px 0;font-size:12px;line-height:1.7}
+  .cfProfileGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+  .cfProfileStat{min-width:0;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.03)}
+  .cfProfileLabel{font-size:12px;color:#999;margin-bottom:5px}
+  .cfProfileValue{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+  @media(max-width:560px){.cfProfileGrid{grid-template-columns:1fr}}
   `;
 
   function esc(s) {
@@ -172,6 +182,11 @@
       let rankData = null;
       let rankError = '';
       let rankRequestSeq = 0;
+      let rankOpen = false;
+      let rankProfile = null;
+      let rankHistory = [];
+      let rankLoadError = '';
+      let lastSettlement = null;
       let inviteStatus = '';
       let activeInviteId = null;
       const invitePopup = el('div');
@@ -224,6 +239,113 @@
         finally { if (leaderboardOpen && rankRequestSeq === requestSeq) render(); }
       }
 
+      async function loadRank(withHistory = false) {
+        if (!authUser) return;
+        const accountId = authUser.id;
+        try {
+          const paths = withHistory ? ['/api/rank/me', '/api/rank/settlements?limit=20'] : ['/api/rank/me'];
+          const data = await Promise.all(paths.map(async (path) => {
+            const response = await fetch(path, { credentials: 'same-origin', headers: CFTabSession.headers() });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || '军衔读取失败');
+            return payload;
+          }));
+          if (authUser?.id !== accountId) return;
+          rankProfile = data[0];
+          if (withHistory) rankHistory = data[1].settlements || [];
+          rankLoadError = '';
+        } catch (error) { if (authUser?.id === accountId) rankLoadError = error.message; }
+        if (!root.classList.contains('hidden')) render();
+      }
+
+      function rankProgress(profile) {
+        const full = profile.nextLevelAt === null ? 100
+          : 100 * profile.progress / (profile.nextLevelAt - profile.levelStart);
+        return Math.min(100, Math.max(0, full));
+      }
+
+      function formatDuration(seconds) {
+        const total = Math.max(0, Math.floor(Number(seconds) || 0));
+        const hours = Math.floor(total / 3600);
+        const minutes = Math.floor(total % 3600 / 60);
+        return `${hours} 小时 ${minutes} 分 ${total % 60} 秒`;
+      }
+
+      function renderSettlement(body) {
+        if (!lastSettlement) return;
+        const box = el('div', 'cfXpCard');
+        box.appendChild(el('div', 'cfXpTitle', '本局军衔结算'));
+        if (lastSettlement.settlementError) {
+          box.appendChild(el('div', 'cfTip bad', '结算暂不可用，请稍后在军衔记录中查看。'));
+        } else if (!lastSettlement.settlement) {
+          box.appendChild(el('div', 'cfTip', '本局未进入战斗，没有经验结算。'));
+        } else {
+          const s = lastSettlement.settlement;
+          box.appendChild(el('div', null, `获得 <strong>+${s.awarded} XP</strong> · ${esc(s.before.name)} → ${esc(s.after.name)} · 累计 ${s.after.xpTotal} XP`));
+          if (s.breakdown.reason) box.appendChild(el('div', 'cfTip', esc(s.breakdown.reason)));
+          else box.appendChild(el('div', 'cfTip', `参与 ${s.breakdown.base} · 时长 ${s.breakdown.duration} · 胜负 ${s.breakdown.result} · 击杀 ${s.breakdown.kills} · 爆头 ${s.breakdown.headshots}`));
+          box.appendChild(el('div', 'cfTip', `本局 ${s.kills} 击杀 / ${s.headshots} 爆头 / ${s.deaths} 死亡 · 有效参赛 ${s.activeSeconds} 秒`));
+          box.appendChild(el('div', 'cfTip', s.after.nextLevelNeed === null ? '已达最高军衔' : `距离下一级还需 ${s.after.nextLevelNeed} XP`));
+        }
+        body.appendChild(box);
+      }
+
+      function renderRank(body) {
+        const back = el('button', 'cf ghost', '返回');
+        back.onclick = () => { rankOpen = false; render(); };
+        body.appendChild(back);
+        if (rankLoadError) body.appendChild(el('div', 'cfTip bad', esc(rankLoadError)));
+        if (!rankProfile) { body.appendChild(el('div', 'cfEmpty', '正在加载个人信息…')); return; }
+        body.appendChild(el('h2', 'cfXpTitle', '个人信息'));
+        const account = rankProfile.account || authUser;
+        const details = el('div', 'cfProfileGrid');
+        for (const [label, value] of [['昵称', account.name], ['邮箱', account.email]]) {
+          const item = el('div', 'cfProfileStat');
+          item.appendChild(el('div', 'cfProfileLabel', label));
+          const content = el('div', 'cfProfileValue');
+          content.textContent = value || '—';
+          item.appendChild(content);
+          details.appendChild(item);
+        }
+        body.appendChild(details);
+        const p = rankProfile.profile;
+        const card = el('div', 'cfXpCard');
+        card.appendChild(el('div', 'cfXpTitle', `军衔 · ${p.level} 级 ${esc(p.name)}`));
+        card.appendChild(el('div', 'cfTip', `累计 ${p.xpTotal} XP · ${p.nextLevelNeed === null ? '已满级' : `升级还需 ${p.nextLevelNeed} XP`}`));
+        const track = el('div', 'cfXpTrack');
+        const fill = document.createElement('span');
+        fill.style.width = rankProgress(p) + '%';
+        track.appendChild(fill); card.appendChild(track);
+        card.appendChild(el('div', 'cfTip', p.nextLevelAt === null ? '当前军衔进度：已满级'
+          : `当前军衔进度：${p.progress} / ${p.nextLevelAt - p.levelStart} XP（${rankProgress(p).toFixed(1)}%）`));
+        if (!rankProfile.xpEnabled) card.appendChild(el('div', 'cfTip', '军衔系统试运行中，当前比赛暂不发放经验。'));
+        body.appendChild(card);
+        const stats = rankProfile.stats || { kills: 0, deaths: 0, kda: 0, playSeconds: 0 };
+        const statsGrid = el('div', 'cfProfileGrid');
+        for (const [label, value] of [
+          ['累计击杀数', stats.kills], ['累计死亡数', stats.deaths],
+          ['KDA', Number(stats.kda).toFixed(2)], ['累计对局时长', formatDuration(stats.playSeconds)],
+        ]) {
+          const item = el('div', 'cfProfileStat');
+          item.appendChild(el('div', 'cfProfileLabel', label));
+          item.appendChild(el('div', 'cfProfileValue', esc(value)));
+          statsGrid.appendChild(item);
+        }
+        body.appendChild(statsGrid);
+        body.appendChild(el('div', 'cfTip', '击杀和死亡统计真人对战；暂未记录助攻，KDA 按击杀 ÷ max(死亡, 1)计算。对局时长统计已结束比赛的服务器参赛时间。'));
+        body.appendChild(el('div', 'cfXpTitle', '最近结算'));
+        if (!rankHistory.length) body.appendChild(el('div', 'cfTip', '暂无比赛结算记录'));
+        for (const s of rankHistory) {
+          const when = new Date(s.endedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+          const result = { win: '胜利', draw: '平局', loss: '失败', aborted: '中断' }[s.result] || '结束';
+          const item = el('div', 'cfXpHistory');
+          item.appendChild(el('div', null, `${esc(when)} · ${result} · +${s.awarded} XP`));
+          item.appendChild(el('div', 'cfTip', s.breakdown.reason ? esc(s.breakdown.reason)
+            : `参与 ${s.breakdown.base} · 时长 ${s.breakdown.duration} · 胜负 ${s.breakdown.result} · 击杀 ${s.breakdown.kills} · 爆头 ${s.breakdown.headshots}`));
+          body.appendChild(item);
+        }
+      }
+
       async function authRequest(path, body) {
         const response = await fetch('/api/auth/' + path, {
           method: body === undefined ? 'GET' : 'POST',
@@ -245,6 +367,10 @@
         room.net.close();
         room.name = '';
         leaderboardOpen = false;
+        rankOpen = false;
+        rankProfile = null;
+        rankHistory = [];
+        lastSettlement = null;
         try { await authRequest('logout', {}); } catch (_) {}
         authUser = null;
         authMode = 'login';
@@ -338,6 +464,7 @@
             if (mode === 'register') {
               const data = await authRequest('verify-register', { email: authEmail, code: code.value.trim() });
               authUser = data.account;
+              void loadRank();
               registrationSent = false;
               room.name = authUser.name;
               room.net.connect();
@@ -353,6 +480,7 @@
             }
             const data = await authRequest('login', { email: authEmail, password: password.value });
             authUser = data.account;
+            void loadRank();
             authNotice = '';
             room.name = authUser.name;
             room.net.connect();
@@ -422,6 +550,7 @@
             if (p) {
               s.appendChild(el('span', null, esc(p.name)));
               const tags = el('span', 'st');
+              if (p.rank) tags.appendChild(el('span', 'cfTag', esc(p.rank)));
               if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
               if (p.ready) tags.appendChild(el('span', 'cfTag rdy', '已准备'));
               if (p.pendingBattle) tags.appendChild(el('span', 'cfTag', '待加入'));
@@ -540,7 +669,7 @@
       let lastView = '';
 
       function render() {
-        const view = !room.registered ? 'connect' : leaderboardOpen ? 'leaderboard' : (room.room ? 'room' : 'lobby');
+        const view = !room.registered ? 'connect' : rankOpen ? 'rank' : leaderboardOpen ? 'leaderboard' : (room.room ? 'room' : 'lobby');
         root.innerHTML = '';
         const card = el('div', 'cfCard' + (room.registered ? ' hasOnline' : ''));
 
@@ -550,11 +679,15 @@
         head.appendChild(el('h1', null, opts.title || '运输船 · 联机对战'));
         head.appendChild(el('span', 'sp'));
         if (authUser) {
-          head.appendChild(el('span', 'cfTip', esc(authUser.name)));
+          head.appendChild(el('span', 'cfTip', esc(authUser.name) + (rankProfile ? ` · ${esc(rankProfile.profile.name)}` : '')));
           if (room.registered) {
+            const rankButton = el('button', 'cf ghost', rankOpen ? '关闭个人信息' : '个人信息');
+            rankButton.onclick = () => { rankOpen = !rankOpen; leaderboardOpen = false; render(); if (rankOpen) void loadRank(true); };
+            head.appendChild(rankButton);
             const leaderboardButton = el('button', 'cf ghost', leaderboardOpen ? '关闭排行' : '排行榜');
             leaderboardButton.onclick = () => {
               leaderboardOpen = !leaderboardOpen;
+              rankOpen = false;
               rankError = '';
               render();
               if (leaderboardOpen) void loadLeaderboard();
@@ -589,9 +722,15 @@
         card.appendChild(layout);
 
         if (view === 'connect') renderConnect(body);
+        else if (view === 'rank') renderRank(body);
         else if (view === 'leaderboard') renderLeaderboard(body);
         else if (view === 'lobby') renderLobby(body);
         else renderRoom(body);
+        if (lastSettlement && (view === 'room' || view === 'lobby')) {
+          const holder = el('div');
+          renderSettlement(holder);
+          body.prepend(holder);
+        }
 
         root.appendChild(card);
 
@@ -602,6 +741,7 @@
       room.on('open', render);
       room.on('close', () => { dismissInvite(); inviteStatus = ''; render(); });
       room.on('hello', render);
+      room.on('joined', () => { lastSettlement = null; render(); });
       room.on('list', render);
       room.on('room', () => { if (room.room) dismissInvite(); render(); });
       room.on('invite', showInvite);
@@ -621,8 +761,8 @@
         const onlineSide = root.querySelector('.cfOnlinePanel');
         if (onlineSide) renderOnlineList(onlineSide, room, true);
       });
-      room.on('start', (m) => { root.classList.add('hidden'); opts.onStart && opts.onStart(m); });
-      room.on('end', () => { root.classList.remove('hidden'); render(); });
+      room.on('start', (m) => { lastSettlement = null; root.classList.add('hidden'); opts.onStart && opts.onStart(m); });
+      room.on('end', (m) => { lastSettlement = m; root.classList.remove('hidden'); render(); void loadRank(rankOpen); });
       room.on('err', (m) => {
         if (!room.registered) {
           showAuthError(m.msg || '连接失败');
@@ -642,6 +782,7 @@
             const data = await authRequest('me');
             if (root.classList.contains('hidden')) return;
             authUser = data.account;
+            void loadRank();
             room.name = authUser.name;
             if (!room.net.open) room.net.connect();
           } catch (_) { authUser = null; }
