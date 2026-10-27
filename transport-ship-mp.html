@@ -4829,9 +4829,13 @@ void main() {
 
 			// composition + solar disc
 			float sundisc = clamp( ( cosTheta - sunAngularDiameterCos ) * 50000.0, 0.0, 1.0 ) * showSunDisc;
-			vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );
+			vec3 sundiscColor = ( 0.6 * sundisc ) * min( vSunE * Fex, vec3( 1.0 ) );
 
-			vec3 texColor = ( Lin + L0 ) * 0.04 + sundiscColor + vec3( 0.0, 0.0003, 0.00075 );
+			// Cap the broad scattering halo, including the distant sky around the sun.
+			float sunFacing = smoothstep( 0.2, 0.9, cosTheta );
+			float glowCap = mix( 1.2, 0.2, sunFacing );
+			vec3 skyGlow = min( ( Lin + L0 ) * 0.04, vec3( glowCap ) );
+			vec3 texColor = skyGlow + sundiscColor + vec3( 0.0, 0.0003, 0.00075 );
 
 			// Clouds
 			if ( direction.y > 0.0 && cloudCoverage > 0.0 ) {
@@ -4861,7 +4865,7 @@ void main() {
 				// Cloud lighting from the sky's own radiance
 				float dayFactor = smoothstep( -0.08, 0.3, vSunDirection.y );
 				vec3 sunColor = vSunE * Fex * 0.22 * 0.04; // 0.22 ~ albedo/pi, 0.04 = exposure; the aerial composite adds the eye-leg extinction
-				vec3 skyAmbient = Lin * 0.04 + vec3( 0.0, 0.0003, 0.00075 );
+				vec3 skyAmbient = min( Lin * 0.04, vec3( glowCap ) ) + vec3( 0.0, 0.0003, 0.00075 );
 
 				// Beer-powder self-shadow from the sampled density
 				float depth = max( 0.0, cloudNoise - threshold );
@@ -4876,6 +4880,7 @@ void main() {
 				vec3 cloudColor = skyAmbient + sunColor * shade;
 				cloudColor += sunColor * silver * edge * 0.6;
 				cloudColor *= max( dayFactor, 0.03 );
+				cloudColor = min( cloudColor, vec3( mix( 1.0, 0.65, sunFacing ) ) );
 
 				// Cloud opacity via Beer's law: density sets how solid the clouds get
 				float alpha = ( 1.0 - exp( depth * cloudDensity * -12.0 ) ) * horizonFade;
@@ -4962,7 +4967,8 @@ float fbm6(vec2 p){ float s=0., a=.5; for(int i=0;i<6;i++){ s+=a*vnoise(p); p=p*
         vec2 cuv = R.xz / max(R.y, 0.05) * 0.6 + vec2(uTime * 0.01, 0.0);
         float cl = smoothstep(0.5, 0.8, fbm4(cuv));
         sky = mix(sky, uHor * 1.15 + 0.1, cl * 0.5 * smoothstep(0.02, 0.2, R.y));
-        float spec = pow(max(dot(R, uSunDir), 0.0), 900.0) * 60.0 + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.6;
+        // Keep distant water reflections readable instead of forming a bright streak.
+        float spec = pow(max(dot(R, uSunDir), 0.0), 900.0) * 2.0 + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.12;
         // \u6C34\u4F53\u989C\u8272 + \u6B21\u8868\u9762\u6563\u5C04
         float sss = pow(max(dot(V, -uSunDir) * 0.5 + 0.5, 0.0), 3.0) * clamp(vH * 0.6 + 0.3, 0.0, 1.0);
         vec3 body = mix(uDeep, uShallow, clamp(vH * 0.35 + 0.25, 0.0, 1.0) * 0.6 + sss * 0.5);

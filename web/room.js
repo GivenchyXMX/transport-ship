@@ -10,12 +10,14 @@
  *    presence {players}            在线玩家及所在房间刷新
  *    room   {room}                  当前房间状态变化（有人进出 / 改阵营 / 改准备）
  *    joined {roomId}
+ *    kicked {roomId,reason}         被房主移出房间
  *    start  {selfId,team,size,goal,players[],bots[]}   对局开始
  *    member_join {player}          战斗中加入的玩家
  *    member_leave {netId}          战斗中离开的玩家
  *    invite {inviteId,fromName,roomName,expiresAt}  收到房间邀请
  *    invite_cancel {inviteId}      邀请失效
  *    invite_status {status,name}   发出的邀请状态
+ *    kick {netId}                   房主踢人请求
  *    st     {ts,a:[{i,p,y,pi,c,fwd,sp,g,vy,w,r,f,hp,al}]}  所有人状态广播
  *    hp     {i,hp,armor,k,w,p}      有人掉血（服务器裁决结果）
  *    kill   {v,k,w,hs,score}        有人被击杀
@@ -50,6 +52,12 @@
         this._e('room', m);
       });
       net.on('joined',  (m) => this._e('joined', m));
+      net.on('kicked',  (m) => {
+        this.room = null;
+        this.me = null;
+        this.inGame = false;
+        this._e('kicked', m);
+      });
       net.on('start',   (m) => { this.inGame = true; this._e('start', m); });
       net.on('member_join', (m) => this._e('member_join', m));
       net.on('member_leave', (m) => this._e('member_leave', m));
@@ -90,6 +98,7 @@
     setReady(v) { this.net.send({ t: 'ready', v: !!v }); }
     start() { this.net.send({ t: 'start' }); }
     joinBattle() { this.net.send({ t: 'join_battle' }); }
+    kick(netId) { this.net.send({ t: 'kick', netId }); }
     invite(netId) { this.net.send({ t: 'invite', to: netId }); }
     replyInvite(inviteId, accept) { this.net.send({ t: 'invite_reply', inviteId, accept: !!accept }); }
 

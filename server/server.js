@@ -175,6 +175,7 @@ let playerSeq = 0;
  * @property {'lobby'|'playing'} state
  * @property {string|null} host 房主 netId
  * @property {Map<string, Player>} players
+ * @property {Set<string>} kickedAccounts 仅在本房间存活期间禁止重入的账号
  * @property {Map<string, Object>} botActors  netId -> {netId,name,team,primary}
  * @property {{BL:number,GR:number}} score
  * @property {number} endsAt
@@ -283,6 +284,7 @@ function createRoom(cfg) {
     state: 'lobby',
     host: null,
     players: new Map(),
+    kickedAccounts: new Set(),
     botActors: new Map(),
     botState: [],
     score: { BL: 0, GR: 0 },
@@ -869,6 +871,9 @@ function handle(player, msg) {
       if (!target || target.ws.readyState !== target.ws.OPEN || target.room || target === player) {
         send(player.ws, { t: 'err', msg: '该玩家已不在空闲状态' }); return;
       }
+      if (room.kickedAccounts.has(target.accountId)) {
+        send(player.ws, { t: 'err', msg: '该玩家已被移出当前房间' }); return;
+      }
       if (pendingInvites.has(target.netId)) {
         send(player.ws, { t: 'err', msg: '该玩家正在处理另一条邀请' }); return;
       }
@@ -924,6 +929,7 @@ function handle(player, msg) {
       const r = rooms.get(String(msg.roomId || ''));
       if (!r) { send(player.ws, { t: 'err', msg: '房间不存在' }); return; }
       if (r === room) return;
+      if (r.kickedAccounts.has(player.accountId)) { send(player.ws, { t: 'err', msg: '你已被移出该房间' }); return; }
       if (r.players.size >= r.size * 2) { send(player.ws, { t: 'err', msg: '房间已满' }); return; }
       const late = r.state === 'playing';
       if (late && (r.endsAt - now() < MIN_JOIN_MS || r.score.BL >= r.goal || r.score.GR >= r.goal)) {
@@ -1025,6 +1031,21 @@ function handle(player, msg) {
       if (room) leaveRoom(player);
       sendRoomList(player.ws);
       return;
+
+    case 'kick': {
+      if (!room || room.host !== player.netId) {
+        send(player.ws, { t: 'err', msg: '只有房主可以踢人' }); return;
+      }
+      const target = room.players.get(String(msg.netId || ''));
+      if (!target || target === player) {
+        send(player.ws, { t: 'err', msg: '该玩家已不在房间中' }); return;
+      }
+      room.kickedAccounts.add(target.accountId);
+      send(target.ws, { t: 'kicked', roomId: room.id, reason: '你已被房主移出房间' });
+      leaveRoom(target);
+      sendRoomList(target.ws);
+      return;
+    }
 
     /* ---------------- 对局中 ---------------- */
     case 'st': {
