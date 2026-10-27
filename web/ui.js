@@ -70,6 +70,8 @@
   .cfSlot{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
   .cfSlot.mine{background:rgba(245,179,33,.12)}
   .cfSlot .st{margin-left:auto;font-size:11px;color:#999}
+  .cfSlotName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  button.cf.cfKick{flex:none;padding:4px 8px;font-size:11px;color:#ff9b9b;border-color:rgba(255,120,120,.4)}
   .cfSlot.empty{color:#8c8c8c;cursor:pointer}
   .cfSlot.empty:hover{background:rgba(255,255,255,.06);color:#ddd}
   .cfTag{font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.12)}
@@ -188,6 +190,7 @@
       let rankLoadError = '';
       let lastSettlement = null;
       let inviteStatus = '';
+      let lobbyNotice = '';
       let activeInviteId = null;
       const invitePopup = el('div');
       invitePopup.id = 'cfInvitePopup';
@@ -495,6 +498,7 @@
 
       /* ---------------- 大厅 ---------------- */
       function renderLobby(body) {
+        if (lobbyNotice) body.appendChild(el('div', 'cfTip bad', esc(lobbyNotice)));
         const row = el('div', 'cfRow');
         const nm = el('input', 'cf'); nm.placeholder = '房间名'; nm.value = (room.name || '玩家') + '的房间';
         const size = el('select', 'cf');
@@ -536,6 +540,14 @@
         const me = room.me;
         const choosingBattle = r.state === 'playing' && !!me?.pendingBattle;
         const canChangeTeam = r.state === 'lobby' || choosingBattle;
+        const kickButton = (player) => {
+          const button = el('button', 'cf ghost cfKick', '踢出');
+          button.title = `将 ${player.name} 移出房间`;
+          button.onclick = () => {
+            if (window.confirm(`确定将 ${player.name} 移出房间？该玩家不能重新加入当前房间。`)) room.kick(player.netId);
+          };
+          return button;
+        };
         body.appendChild(el('div', 'cfRow',
           `<div class="cfTip"><b style="font-size:14px">${esc(r.name)}</b> · ${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}</div>`));
 
@@ -548,7 +560,7 @@
             const p = slots[tk][i];
             const s = el('div', 'cfSlot' + (p ? (p.netId === room.selfId ? ' mine' : '') : ' empty'));
             if (p) {
-              s.appendChild(el('span', null, esc(p.name)));
+              s.appendChild(el('span', 'cfSlotName', esc(p.name)));
               const tags = el('span', 'st');
               if (p.rank) tags.appendChild(el('span', 'cfTag', esc(p.rank)));
               if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
@@ -562,6 +574,7 @@
                 tags.appendChild(out);
               }
               s.appendChild(tags);
+              if (room.isHost && p.netId !== room.selfId) s.appendChild(kickButton(p));
             } else {
               s.appendChild(el('span', null, canChangeTeam ? '空位 · 点击加入' : '空位'));
               if (canChangeTeam) s.onclick = () => room.setTeam(tk);
@@ -572,11 +585,17 @@
         });
         body.appendChild(teams);
 
-        const unassigned = r.players.filter((p) => p.pendingBattle && !p.team);
+        const unassigned = r.players.filter((p) => !p.team);
         if (unassigned.length) {
-          const waiting = el('div', 'cfTip');
-          waiting.textContent = `等待选择阵营：${unassigned.map((p) => p.name).join('、')}`;
-          body.appendChild(waiting);
+          body.appendChild(el('div', 'cfTip', '等待选择阵营：'));
+          for (const p of unassigned) {
+            const row = el('div', 'cfSlot');
+            const name = el('span', 'cfSlotName');
+            name.textContent = p.name;
+            row.appendChild(name);
+            if (room.isHost) row.appendChild(kickButton(p));
+            body.appendChild(row);
+          }
         }
         const full = r.players.length >= r.size * 2;
         const hasBothTeams = ['BL', 'GR'].every((team) => r.players.some((p) => p.team === team));
@@ -741,7 +760,13 @@
       room.on('open', render);
       room.on('close', () => { dismissInvite(); inviteStatus = ''; render(); });
       room.on('hello', render);
-      room.on('joined', () => { lastSettlement = null; render(); });
+      room.on('joined', () => { lastSettlement = null; lobbyNotice = ''; render(); });
+      room.on('kicked', (m) => {
+        lobbyNotice = m.reason || '你已被房主移出房间';
+        lastSettlement = null;
+        root.classList.remove('hidden');
+        render();
+      });
       room.on('list', render);
       room.on('room', () => { if (room.room) dismissInvite(); render(); });
       room.on('invite', showInvite);

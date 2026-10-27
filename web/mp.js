@@ -677,6 +677,15 @@
       const g = MP.game;
       if (MP.active && g) { MP.active = false; try { g.quitToMenu(); } catch (_) {} }
     });
+
+    room.on('kicked', () => {
+      const g = MP.game;
+      if (MP.sendTimer) { clearInterval(MP.sendTimer); MP.sendTimer = 0; }
+      if (MP.active && g) {
+        MP.active = false;
+        try { g.quitToMenu(); } catch (e) { console.error('[MP] 离开被踢出的对局失败', e); }
+      }
+    });
   }
 
   function applyGhostState(state) {

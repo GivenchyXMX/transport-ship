@@ -9,6 +9,8 @@
 | 了解规则、操作、房间和排行榜 | [游戏玩法](docs/游戏玩法.md) |
 | 在自己的 Linux 服务器上部署、配置邮箱与 HTTPS | [自行部署](docs/自行部署.md) |
 | 了解军衔经验的计算和结算限制 | [军衔与经验系统设计](docs/军衔与经验系统设计.md) |
+<img src="https://jiuwei-picture-bed.oss-cn-hangzhou.aliyuncs.com/image/2025/20261027215241234.png"/>
+<img src="https://jiuwei-picture-bed.oss-cn-hangzhou.aliyuncs.com/image/2025/20261027215341373.png"/>
 
 ## 本机快速启动
 
