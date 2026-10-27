@@ -1,0 +1,38 @@
+web/ui.js
+  s_66967b13f26c79::t_e54f20a23238fc 73-74,193,501,543-550,563,577,590-598,763-769
+  s_66967b13f26c79::t_64210f6fe620d4 588
+transport-ship-mp.html
+  s_66967b13f26c79::t_5551cc56c79815 4832
+  s_66967b13f26c79::t_40b696ba593685 4970-4971
+  s_66967b13f26c79::t_7b56fbb8119527 4834-4837,4868,4883
+  s_66967b13f26c79::t_b2978ffbef6f3c 4838
+docs/游戏玩法.md
+  s_66967b13f26c79::t_9fa303310e921f 43-44
+web/mp.js
+  s_66967b13f26c79::t_e54f20a23238fc 680-688
+web/testbed.html
+  s_66967b13f26c79::t_9fa303310e921f 107
+server/server.js
+  s_66967b13f26c79::t_317c5397c2f7b6 178
+  s_66967b13f26c79::t_b2978ffbef6f3c 287,874-876,932,1035-1048
+  s_66967b13f26c79::t_346ce9c9300d5e 1049
+web/room.js
+  s_66967b13f26c79::t_a9a633932db354 20
+  s_66967b13f26c79::t_b2978ffbef6f3c 13,55-60,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9c2eb1fab088206faf95ad0bf70e56a104342675",
+  "prompts": {},
+  "sessions": {
+    "s_66967b13f26c79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167af-6ab0-79d0-aa0e-d5f1fe6914bd",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
