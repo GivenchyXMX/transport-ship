@@ -1,0 +1,36 @@
+transport-ship-mp.html
+  s_66967b13f26c79::t_17eacdd28fcbc8 4738
+  s_66967b13f26c79::t_0da82a755b8cb1 4835-4837,4841,4892
+  s_66967b13f26c79::t_d8de1ae03c31f1 4655,4914,5037
+  s_66967b13f26c79::t_1982e3006e91cf 4894,4896
+  s_66967b13f26c79::t_d241cf1b0660cf 4838-4840
+  s_66967b13f26c79::t_4bcd18b6539259 4906-4907
+  s_66967b13f26c79::t_5afbd2568d60a4 5042,5105,5116,5131
+  s_66967b13f26c79::t_3c6320f15616d1 4844-4847
+  s_66967b13f26c79::t_95aad8f44199d3 4842-4843
+  s_66967b13f26c79::t_f9952d399be1a5 4833-4834
+  s_66967b13f26c79::t_937d8a38652ad7 5032-5034
+README.md
+  h_c19cdd304bb9a6 12-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "89aca0fc8b1447232470df246a101023fd4507a8",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_66967b13f26c79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167af-6ab0-79d0-aa0e-d5f1fe6914bd",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
