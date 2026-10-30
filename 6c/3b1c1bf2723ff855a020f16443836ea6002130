@@ -1,0 +1,66 @@
+server/test/social-order.test.js
+  s_df3337bf9576d9::t_708182aee4efb2 1-40
+server/package.json
+  s_df3337bf9576d9::t_9c673c20e8760c 13
+src/client/ui/hud.part.js
+  s_e27c1a2d49a806::t_e7cdea3ebf8324 100
+  s_e27c1a2d49a806::t_b649352f56282f 1
+  s_e27c1a2d49a806::t_c54cca21850aa5 65-74,110
+  s_e27c1a2d49a806::t_90480d29d7cd53 87-96
+web/game.js
+  s_e27c1a2d49a806::t_88cc9b640914d8 5214-5223,5249,5259-5260
+  s_e27c1a2d49a806::t_9f7a3f638e17a5 5150,5236-5245,5303
+  s_e27c1a2d49a806::t_844193f62c6581 5023
+server/server.js
+  s_df3337bf9576d9::t_7b6f66bbeae1bb 170-173
+  s_e27c1a2d49a806::t_92785fc96b24d6 423,1323
+src/client/graphics/effects.part.js
+  s_e27c1a2d49a806::t_b84119789b0514 1
+README.md
+  h_c19cdd304bb9a6 12-13
+  s_e27c1a2d49a806::t_6fa884fd3cd68a 28,32-33
+src/client/actors/base.part.js
+  s_e27c1a2d49a806::t_19492d916fe2fd 1
+src/client/actors/bot.part.js
+  s_e27c1a2d49a806::t_19492d916fe2fd 1
+web/ui.js
+  s_df3337bf9576d9::t_7b6f66bbeae1bb 577-582
+  s_df3337bf9576d9::t_21d6ee49339ebb 585-587,596,604-610
+  s_e27c1a2d49a806::t_0c8c2cbc1e619c 261,961,964,982,1020,1082
+src/client/core/game.part.js
+  s_e27c1a2d49a806::t_56d07862146b04 1
+web/game.css
+  s_e27c1a2d49a806::t_10e72878df6076 154,161
+  s_e27c1a2d49a806::t_55470a3a7882ed 147-153
+server/social.js
+  s_df3337bf9576d9::t_7b6f66bbeae1bb 60,65,69-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c3b1c1bf2723ff855a020f16443836ea6002130",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_df3337bf9576d9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18d40-1592-7a21-a805-86721364fed8",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    },
+    "s_e27c1a2d49a806": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18dc7-50dd-7192-b437-f13558adcba4",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
