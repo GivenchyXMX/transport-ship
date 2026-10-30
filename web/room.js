@@ -90,7 +90,7 @@
       this.net.send({ t: 'hello', name: this.name, primary: primary || 'ak47' });
     }
     refresh() { this.net.send({ t: 'list' }); }
-    create(cfg) { this.net.send({ t: 'create', name: cfg.name, mapId: cfg.mapId, size: cfg.size, goal: cfg.goal, bots: cfg.bots || 0, team: cfg.team || 'BL' }); }
+    create(cfg) { this.net.send({ t: 'create', name: cfg.name, mapId: cfg.mapId, size: cfg.size, goal: cfg.goal, team: cfg.team || 'BL' }); }
     join(roomId, instanceId) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}) }); }
     leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; }
 

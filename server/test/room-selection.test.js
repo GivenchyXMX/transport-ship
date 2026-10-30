@@ -21,9 +21,9 @@ test('房间客户端保存服务器地图目录并在建房请求中提交选�
   ] });
   assert.equal(room.maps.length, 1);
   assert.equal(room.maps[0].id, 'transport-ship');
-  room.create({ name: '测试房间', mapId: room.maps[0].id, size: 5, goal: 50, team: 'BL' });
+  room.create({ name: '测试房间', mapId: room.maps[0].id, size: 5, goal: 50, bots: 6, team: 'BL' });
   assert.deepEqual(JSON.parse(JSON.stringify(sent[0])), {
     t: 'create', name: '测试房间', mapId: 'transport-ship', size: 5,
-    goal: 50, bots: 0, team: 'BL',
+    goal: 50, team: 'BL',
   });
 });
