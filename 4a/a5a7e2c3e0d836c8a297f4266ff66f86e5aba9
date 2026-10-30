@@ -1,0 +1,39 @@
+web/assets/audio/SOURCES.md
+  s_3c73414532f3ac::t_052831bc213c4b 1-8
+web/assets/maps/SOURCES.md
+  s_3c73414532f3ac::t_ae9954477cc9c0 3
+  s_3c73414532f3ac::t_56e773dc641224 1-2
+server/social.js
+  s_3c73414532f3ac::t_fa1df805906bec 7,57,65-68,74-75,77
+web/ui.js
+  s_3c73414532f3ac::t_6a60a475192157 899-902,904
+  s_3c73414532f3ac::t_8aa4d8a0134b94 47-51,274-281,403-409,412
+  s_3c73414532f3ac::t_de4d9646267388 45,246-273,282-289
+  s_3c73414532f3ac::t_e2c34d50d1ddbc 402,410-411,413-414,417-418,1064,1122-1123,1177,1211
+  s_3c73414532f3ac::t_e7ce04b3a7cfb7 106-107,109
+  s_3c73414532f3ac::t_085b6ab2ef7b81 1178
+  s_3c73414532f3ac::t_e6dfed41c3d493 58-59,477-478,484-486
+  s_3c73414532f3ac::t_080970bf03a4e3 903
+  s_3c73414532f3ac::t_ae9954477cc9c0 108,110-113
+  s_3c73414532f3ac::t_33ef6ef015b1e2 290
+server/server.js
+  s_3c73414532f3ac::t_ae9954477cc9c0 51
+  s_3c73414532f3ac::t_2ef97af1d38d22 49-50,853,926
+  s_3c73414532f3ac::t_080970bf03a4e3 919,923
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4aa5a7e2c3e0d836c8a297f4266ff66f86e5aba9",
+  "prompts": {},
+  "sessions": {
+    "s_3c73414532f3ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17de3-87e5-7292-afc8-59406832c299",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
