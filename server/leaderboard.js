@@ -25,6 +25,7 @@ function boardsFrom(rows, getMilitaryRank) {
   const data = rows.filter((row) => row.kills || row.deaths).map((row) => ({
     accountId: row.accountId,
     name: row.name,
+    email: row.email,
     militaryRank: getMilitaryRank(row.accountId),
     kills: Number(row.kills) || 0,
     headshots: Number(row.headshots) || 0,
@@ -57,7 +58,7 @@ function makeLeaderboard(getMilitaryRank) {
   if (!columns.includes('match_id')) db.exec('ALTER TABLE combat_events ADD COLUMN match_id TEXT');
   db.exec('CREATE INDEX IF NOT EXISTS combat_events_match ON combat_events(match_id, killer_id, victim_id)');
   const insert = db.prepare('INSERT INTO combat_events (happened_at,killer_id,victim_id,headshot,match_id) VALUES (?,?,?,?,?)');
-  const historical = db.prepare(`SELECT a.id AS accountId, a.name,
+  const historical = db.prepare(`SELECT a.id AS accountId, a.name, a.email,
       COALESCE(k.kills,0) AS kills, COALESCE(k.headshots,0) AS headshots,
       COALESCE(d.deaths,0) AS deaths
     FROM accounts a
@@ -90,7 +91,7 @@ function makeLeaderboard(getMilitaryRank) {
         if (room.state !== 'playing') continue;
         for (const player of room.players.values()) {
           const stats = player.matchStats;
-          if (stats) rows.push({ accountId: player.accountId, name: player.name, ...stats });
+          if (stats) rows.push({ accountId: player.accountId, name: player.name, email: player.email, ...stats });
         }
       }
       return { period: 'live', windowStart: null, updatedAt: time, boards: boardsFrom(rows, getMilitaryRank) };

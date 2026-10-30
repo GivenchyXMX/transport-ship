@@ -90,7 +90,7 @@
     }
     refresh() { this.net.send({ t: 'list' }); }
     create(cfg) { this.net.send({ t: 'create', name: cfg.name, size: cfg.size, goal: cfg.goal, bots: cfg.bots || 0, team: cfg.team || 'BL' }); }
-    join(roomId) { this.net.send({ t: 'join', roomId }); }
+    join(roomId, instanceId) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}) }); }
     leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; }
 
     /* ---------------- 房间内 ---------------- */

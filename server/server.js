@@ -24,6 +24,7 @@ const { WebSocketServer } = require('ws');
 const { makeAuth } = require('./auth');
 const { makeLeaderboard, PERIODS } = require('./leaderboard');
 const { makeRank } = require('./rank');
+const { makeSocial } = require('./social');
 const combat = require('./combat');
 
 /* ------------------------------- 常量 ------------------------------------ */
@@ -43,10 +44,11 @@ const TEAM_NAME  = { BL: '潜伏者', GR: '保卫者' };
 const WEAPONS    = new Set(['ak47', 'm4a1', 'awm', 'mp5', 'deagle', 'knife', 'he']);
 const ROOT_DIR   = path.resolve(__dirname, '..');
 const PUBLIC_FILES = new Set([
-  '/index.html', '/transport-ship-mp.html', '/web/testbed.html',
+  '/index.html', '/transport-ship-mp.html', '/invite.html', '/web/testbed.html',
   '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
 ]);
 const auth = makeAuth();
+const social = makeSocial();
 const leaderboard = makeLeaderboard((accountId) => rank.getProfile(accountId).name);
 const rank = makeRank();
 const COOKIE_PREFIX = 'ship_session_';
@@ -83,6 +85,13 @@ function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true; // non-browser clients
   return origin === (process.env.PUBLIC_ORIGIN || `http://${req.headers.host}`);
+}
+function localInviteOrigin(req) {
+  const remote = req.socket.remoteAddress;
+  const host = req.headers.host;
+  const loopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+  if (!loopback || ![`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`].includes(host)) return '';
+  return `http://${host}`;
 }
 async function readJson(req) {
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw Object.assign(new Error('只接受 JSON'), { status: 415 });
@@ -141,6 +150,79 @@ async function handleAuth(req, res, rel) {
   } catch (e) {
     if (!e.status) console.error('[auth]', e);
     return json(res, e.status || 500, { error: e.status ? e.message : '服务器错误' });
+  }
+}
+
+async function handleSocial(req, res, rel) {
+  if (!sameOrigin(req)) return json(res, 403, { error: '来源不允许' });
+  const tabId = tabIdFromHeader(req);
+  if (!tabId) return json(res, 400, { error: '缺少有效的标签页标识，请刷新页面' });
+  const me = auth.current(tokenFromCookie(req, tabId));
+  if (!me && rel !== '/api/social/invitations/redeem') return json(res, 401, { error: '请先登录' });
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    if (rel === '/api/social/players' && req.method === 'GET') {
+      const data = social.players(me.id, url.searchParams.get('q'), url.searchParams.get('cursor'), url.searchParams.get('limit'));
+      return json(res, 200, { ...data, players: data.players.map((p) => ({ ...p, ...presenceFor(p.accountId) })) });
+    }
+    if (rel === '/api/social/friends' && req.method === 'GET')
+      return json(res, 200, { friends: social.friends(me.id).map((p) => ({ ...p, ...presenceFor(p.accountId) })) });
+    if (rel === '/api/social/requests' && req.method === 'GET') return json(res, 200, { requests: social.requests(me.id) });
+    if (rel.startsWith('/api/social/friends/') && req.method === 'DELETE') {
+      const target = rel.slice('/api/social/friends/'.length);
+      social.removeFriend(me.id, target);
+      notifySocial([me.id, target]);
+      return json(res, 200, { ok: true });
+    }
+    if (rel === '/api/social/requests' && req.method === 'POST') {
+      const body = await readJson(req);
+      const result = social.sendRequest(me.id, body.targetAccountId);
+      notifySocial([me.id, body.targetAccountId]);
+      return json(res, 200, result);
+    }
+    if (rel.startsWith('/api/social/requests/') && rel.endsWith('/respond') && req.method === 'POST') {
+      const body = await readJson(req);
+      if (typeof body.accept !== 'boolean') return json(res, 400, { error: '请明确接受或拒绝' });
+      const id = rel.slice('/api/social/requests/'.length, -'/respond'.length);
+      const result = social.respond(me.id, id, body.accept);
+      notifySocial([me.id, result.otherId]);
+      return json(res, 200, { ok: true });
+    }
+    if (rel === '/api/social/invitations' && req.method === 'POST') {
+      const body = await readJson(req);
+      const target = social.account(body.targetAccountId);
+      if (!target || target.id === me.id) return json(res, 404, { error: '玩家不存在' });
+      const sender = [...clients.values()].find((c) => c.accountId === me.id && c.ws.readyState === c.ws.OPEN);
+      if (!sender) return json(res, 409, { error: '请先连接联机大厅' });
+      const onlineTarget = [...clients.values()].find((c) => c.accountId === target.id && c.ws.readyState === c.ws.OPEN);
+      if (onlineTarget) {
+        inviteOnline(sender, onlineTarget);
+        return json(res, 200, { mode: 'online' });
+      }
+      if (sender.room && sender.room.players.size >= sender.room.size * 2)
+        return json(res, 409, { error: '房间已满，无法邀请' });
+      if (sender.room?.state === 'playing' &&
+          (sender.room.endsAt - now() < MIN_JOIN_MS || sender.room.score.BL >= sender.room.goal || sender.room.score.GR >= sender.room.goal))
+        return json(res, 409, { error: '对局即将结束，暂时无法邀请' });
+      await social.sendOffline(me.id, target.id, sender.room, localInviteOrigin(req));
+      return json(res, 200, { mode: sender.room ? 'roomEmail' : 'onlineEmail' });
+    }
+    if (rel === '/api/social/invitations/redeem' && req.method === 'POST') {
+      const body = await readJson(req);
+      if (me && me.id !== social.inviteTarget(body.token) && body.switchConfirmed !== true)
+        return json(res, 409, { error: '请确认切换到邮件受邀账号', needsConfirmation: true });
+      const result = social.redeem(body.token);
+      if (me && me.id !== result.account.id) {
+        for (const player of clients.values()) if (player.accountId === me.id && player.tabId === tabId)
+          player.ws.close(4001, '账号已切换');
+      }
+      setSessionCookie(res, tabId, result.session);
+      return json(res, 200, { account: result.account, roomId: result.roomId, instanceId: result.instanceId });
+    }
+    return json(res, 404, { error: '接口不存在' });
+  } catch (error) {
+    if (!error.status) console.error('[social]', error);
+    return json(res, error.status || 500, { error: error.status ? error.message : '服务器错误' });
   }
 }
 
@@ -213,6 +295,7 @@ function broadcast(room, obj, exceptWs) {
 function roomBrief(room) {
   return {
     id: room.id,
+    instanceId: room.instanceId,
     name: room.name,
     map: room.map,
     size: room.size,
@@ -221,7 +304,7 @@ function roomBrief(room) {
     state: room.state,
     host: room.host,
     players: [...room.players.values()].map((p) => ({
-      netId: p.netId, name: p.name, team: p.team, ready: p.ready,
+      netId: p.netId, accountId: p.accountId, name: p.name, email: p.email, team: p.team, ready: p.ready,
       pendingBattle: !!p.pendingBattle,
       rank: rank.getProfile(p.accountId).name,
     })),
@@ -230,7 +313,7 @@ function roomBrief(room) {
 
 function playerBrief(player) {
   return {
-    netId: player.netId, name: player.name, team: player.team,
+    netId: player.netId, name: player.name, email: player.email, team: player.team,
     primary: player.primary || 'ak47', isBot: false,
     rank: rank.getProfile(player.accountId).name,
     stats: player.roundStats ? { ...player.roundStats } : null,
@@ -251,16 +334,27 @@ function sendRoomList(ws) {
   send(ws, { t: 'list', rooms: [...rooms.values()].map(roomBrief) });
 }
 
-/** 在线名单只包含昵称和所在房间，不暴露账号信息。 */
+function presenceFor(accountId) {
+  const player = [...clients.values()].find((c) => c.accountId === accountId && c.ws.readyState === c.ws.OPEN);
+  return player ? {
+    status: !player.room ? 'online' : player.room.state === 'playing' && !player.pendingBattle ? 'battle' : 'room',
+    roomId: player.room?.id || null, roomName: player.room?.name || null,
+  } : { status: 'offline', roomId: null, roomName: null };
+}
+
+/** 在线名单仅发送给已经登录的联机玩家。 */
 function broadcastPresence() {
   const online = new Map();
   for (const player of clients.values()) {
     if (player.ws.readyState !== player.ws.OPEN) continue;
     online.set(player.accountId, {
       netId: player.netId,
+      accountId: player.accountId,
       name: player.name,
+      email: player.email,
       roomId: player.room?.id || null,
       roomName: player.room?.name || null,
+      status: !player.room ? 'online' : player.room.state === 'playing' && !player.pendingBattle ? 'battle' : 'room',
     });
   }
   const raw = JSON.stringify({ t: 'presence', players: [...online.values()].sort((a, b) => a.name.localeCompare(b.name)) });
@@ -271,11 +365,42 @@ function broadcastPresence() {
   }
 }
 
+function notifySocial(accountIds) {
+  for (const player of clients.values()) {
+    if (accountIds.includes(player.accountId)) send(player.ws, { t: 'social_changed' });
+  }
+}
+
+function inviteOnline(player, target) {
+  const room = player.room;
+  if (!room) throw Object.assign(new Error('请先进入房间'), { status: 400 });
+  if (room.players.size >= room.size * 2) throw Object.assign(new Error('房间已满，无法邀请'), { status: 409 });
+  if (room.state === 'playing' &&
+      (room.endsAt - now() < MIN_JOIN_MS || room.score.BL >= room.goal || room.score.GR >= room.goal))
+    throw Object.assign(new Error('对局即将结束，暂时无法邀请'), { status: 409 });
+  if (!target || target.ws.readyState !== target.ws.OPEN || target.room || target === player)
+    throw Object.assign(new Error('该玩家已不在空闲状态'), { status: 409 });
+  if (room.kickedAccounts.has(target.accountId)) throw Object.assign(new Error('该玩家已被移出当前房间'), { status: 403 });
+  if (pendingInvites.has(target.netId)) throw Object.assign(new Error('该玩家正在处理另一条邀请'), { status: 409 });
+  const invite = { id: crypto.randomUUID(), fromId: player.netId, roomId: room.id, expiresAt: now() + INVITE_MS };
+  pendingInvites.set(target.netId, invite);
+  send(target.ws, { t: 'invite', inviteId: invite.id, fromName: player.name,
+    roomId: room.id, roomName: room.name, expiresAt: invite.expiresAt });
+  send(player.ws, { t: 'invite_status', status: 'sent', name: target.name });
+  setTimeout(() => {
+    if (pendingInvites.get(target.netId)?.id !== invite.id) return;
+    pendingInvites.delete(target.netId);
+    send(target.ws, { t: 'invite_cancel', inviteId: invite.id });
+    send(player.ws, { t: 'invite_status', status: 'expired', name: target.name });
+  }, INVITE_MS);
+}
+
 /* --------------------------- 房间生命周期 -------------------------------- */
 function createRoom(cfg) {
   const id = rid();
   const room = {
     id,
+    instanceId: crypto.randomUUID(),
     name: String(cfg.name || '运输船 房间').slice(0, 24),
     map: 'transport-ship',
     size: clamp(Math.round(cfg.size ?? 5), 1, 8),
@@ -361,6 +486,7 @@ function leaveRoom(player) {
   }
   broadcast(room, { t: 'room', room: roomBrief(room) });
   sendRoomListToLobbyIdle();
+  broadcastPresence();
 }
 
 /** 给所有"不在房间里"的连接推一次房间列表，保证大厅是最新的 */
@@ -418,6 +544,7 @@ function startMatch(room) {
     });
   }
   sendRoomListToLobbyIdle();
+  broadcastPresence();
 }
 
 function endMatch(room, reason) {
@@ -436,6 +563,7 @@ function endMatch(room, reason) {
   for (const p of room.players.values()) { p.ready = false; p.pendingBattle = false; }
   broadcast(room, { t: 'room', room: roomBrief(room) });
   sendRoomListToLobbyIdle();
+  broadcastPresence();
 }
 
 function resetCombat(player, t) {
@@ -734,6 +862,7 @@ const server = http.createServer((req, res) => {
   if (rel === '/') rel = '/index.html';
 
   if (rel.startsWith('/api/auth/')) { void handleAuth(req, res, rel); return; }
+  if (rel.startsWith('/api/social/')) { void handleSocial(req, res, rel); return; }
   if (rel === '/api/leaderboard') {
     if (req.method !== 'GET') { json(res, 405, { error: '方法不允许' }); return; }
     if (!sameOrigin(req) || !auth.current(tokenFromCookie(req, tabIdFromHeader(req)))) { json(res, 401, { error: '请先登录' }); return; }
@@ -790,7 +919,8 @@ const server = http.createServer((req, res) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('404'); return; }
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': rel === '/invite.html' ? 'no-store' : 'no-cache',
+      ...(rel === '/invite.html' ? { 'Referrer-Policy': 'no-referrer' } : {}),
       'X-Content-Type-Options': 'nosniff',
     });
     res.end(buf);
@@ -813,11 +943,12 @@ server.on('upgrade', (req, socket, head) => {
 wss.on('connection', (ws, req, account, tabId) => {
   for (const old of clients.values()) if (old.accountId === account.id) old.ws.close(4001, '账号在其他位置登录');
   const player = {
-    netId: pid(), accountId: account.id, tabId, name: account.name, registered: true, room: null, team: null, ready: false,
+    netId: pid(), accountId: account.id, tabId, name: account.name, email: account.email, registered: true, room: null, team: null, ready: false,
     primary: 'ak47', ws, last: null, lastSeen: now(), lastPong: now(),
     hp: 100, armor: 100, alive: true, pendingBattle: false, respawnAt: 0, protectUntil: 0, hitTimes: [],
   };
   clients.set(ws, player);
+  social.online(account.id);
 
   send(ws, { t: 'welcome', netId: player.netId, serverTime: now() });
   send(ws, { t: 'hello', netId: player.netId, name: player.name });
@@ -837,7 +968,13 @@ wss.on('connection', (ws, req, account, tabId) => {
     if (player.pingAt) player.rtt = Math.min(500, player.lastPong - player.pingAt);
   });
 
-  ws.on('close', () => { pendingInvites.delete(player.netId); clients.delete(ws); leaveRoom(player); broadcastPresence(); });
+  ws.on('close', () => {
+    pendingInvites.delete(player.netId);
+    clients.delete(ws);
+    leaveRoom(player);
+    if (![...clients.values()].some((c) => c.accountId === player.accountId && c.ws.readyState === c.ws.OPEN)) social.seen(player.accountId);
+    broadcastPresence();
+  });
   ws.on('error', () => { try { ws.close(); } catch (_) {} });
 });
 
@@ -862,36 +999,9 @@ function handle(player, msg) {
       return;
 
     case 'invite': {
-      if (!room) { send(player.ws, { t: 'err', msg: '请先进入房间' }); return; }
-      if (room.players.size >= room.size * 2) { send(player.ws, { t: 'err', msg: '房间已满，无法邀请' }); return; }
-      if (room.state === 'playing' &&
-          (room.endsAt - now() < MIN_JOIN_MS || room.score.BL >= room.goal || room.score.GR >= room.goal)) {
-        send(player.ws, { t: 'err', msg: '对局即将结束，暂时无法邀请' }); return;
-      }
-      const target = [...clients.values()].find((c) => c.netId === String(msg.to || ''));
-      if (!target || target.ws.readyState !== target.ws.OPEN || target.room || target === player) {
-        send(player.ws, { t: 'err', msg: '该玩家已不在空闲状态' }); return;
-      }
-      if (room.kickedAccounts.has(target.accountId)) {
-        send(player.ws, { t: 'err', msg: '该玩家已被移出当前房间' }); return;
-      }
-      if (pendingInvites.has(target.netId)) {
-        send(player.ws, { t: 'err', msg: '该玩家正在处理另一条邀请' }); return;
-      }
-      const invite = {
-        id: crypto.randomUUID(), fromId: player.netId, roomId: room.id,
-        expiresAt: now() + INVITE_MS,
-      };
-      pendingInvites.set(target.netId, invite);
-      send(target.ws, { t: 'invite', inviteId: invite.id, fromName: player.name,
-        roomId: room.id, roomName: room.name, expiresAt: invite.expiresAt });
-      send(player.ws, { t: 'invite_status', status: 'sent', name: target.name });
-      setTimeout(() => {
-        if (pendingInvites.get(target.netId)?.id !== invite.id) return;
-        pendingInvites.delete(target.netId);
-        send(target.ws, { t: 'invite_cancel', inviteId: invite.id });
-        send(player.ws, { t: 'invite_status', status: 'expired', name: target.name });
-      }, INVITE_MS);
+      const target = [...clients.values()].find((c) => c.netId === String(msg.to || '') || c.accountId === String(msg.toAccountId || ''));
+      try { inviteOnline(player, target); }
+      catch (error) { send(player.ws, { t: 'err', msg: error.message }); }
       return;
     }
 
@@ -929,6 +1039,7 @@ function handle(player, msg) {
     case 'join': {
       const r = rooms.get(String(msg.roomId || ''));
       if (!r) { send(player.ws, { t: 'err', msg: '房间不存在' }); return; }
+      if (msg.instanceId && msg.instanceId !== r.instanceId) { send(player.ws, { t: 'err', msg: '原邀请房间已不存在' }); return; }
       if (r === room) return;
       if (r.kickedAccounts.has(player.accountId)) { send(player.ws, { t: 'err', msg: '你已被移出该房间' }); return; }
       if (r.players.size >= r.size * 2) { send(player.ws, { t: 'err', msg: '房间已满' }); return; }
@@ -948,6 +1059,7 @@ function handle(player, msg) {
         player.respawnAt = 0;
         player.protectUntil = 0;
       }
+      broadcastPresence();
       broadcast(r, { t: 'room', room: roomBrief(r) });
       send(player.ws, { t: 'joined', roomId: r.id });
       sendRoomListToLobbyIdle();
@@ -976,6 +1088,7 @@ function handle(player, msg) {
         send(player.ws, { t: 'err', msg: '对局即将结束，请等待下一局' }); return;
       }
       player.pendingBattle = false;
+      broadcastPresence();
       rank.enter(room.match, player);
       player.matchStats = { kills: 0, headshots: 0, deaths: 0 };
       player.roundStats = { kills: 0, headshots: 0, deaths: 0 };
@@ -1221,5 +1334,9 @@ setInterval(() => {
       continue;
     }
     try { player.pingAt = t; player.ws.ping(); } catch (_) { player.ws.terminate(); }
+    if (!player.seenPersistedAt || t - player.seenPersistedAt > 60_000) {
+      social.seen(player.accountId, t);
+      player.seenPersistedAt = t;
+    }
   }
 }, HEARTBEAT_MS);

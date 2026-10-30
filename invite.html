@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>运输船 · 好友邀请</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101013;color:#eee;font:15px system-ui,"PingFang SC",sans-serif}
+    main{width:min(420px,calc(100vw - 48px));padding:28px;border:1px solid #514027;border-radius:14px;background:#1b1917;text-align:center}
+    h1{font-size:20px;color:#f5bd4d}p{line-height:1.7;color:#c8c6c2}a{color:#f5bd4d}
+  </style>
+</head>
+<body>
+  <main><h1>运输船好友邀请</h1><p id="message">正在验证邀请链接…</p><a href="/transport-ship-mp.html">进入联机大厅</a></main>
+  <script src="/web/net.js"></script>
+  <script>
+    (async () => {
+      const message = document.getElementById('message');
+      const token = new URLSearchParams(location.hash.slice(1)).get('token');
+      history.replaceState(null, '', '/invite.html');
+      if (!token) { message.textContent = '邀请链接缺少令牌，请向好友重新索取。'; return; }
+      async function redeem(switchConfirmed) {
+        const response = await fetch('/api/social/invitations/redeem', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { ...CFTabSession.headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, switchConfirmed }),
+        });
+        const data = await response.json();
+        return { response, data };
+      }
+      try {
+        let { response, data } = await redeem(false);
+        if (data.needsConfirmation) {
+          if (!confirm('当前标签页已登录其他账号。接受邀请后将切换到受邀账号，是否继续？')) {
+            message.textContent = '已取消切换账号。'; return;
+          }
+          ({ response, data } = await redeem(true));
+        }
+        if (!response.ok) throw new Error(data.error || '邀请链接无效');
+        sessionStorage.setItem('ship_invite_intent', JSON.stringify({ roomId: data.roomId, instanceId: data.instanceId }));
+        location.replace('/transport-ship-mp.html');
+      } catch (error) { message.textContent = error.message || '邀请链接无法使用，请重新登录。'; }
+    })();
+  </script>
+</body>
+</html>

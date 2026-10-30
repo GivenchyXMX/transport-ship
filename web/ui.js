@@ -20,22 +20,47 @@
   #cfMp.hidden{display:none}
   .cfCard{width:min(920px,94vw);max-height:88vh;overflow:auto;background:rgba(18,16,14,.92);
     border:1px solid rgba(255,180,90,.25);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
-  .cfCard.hasOnline{width:min(1160px,96vw)}
-  .cfLayout{display:grid;grid-template-columns:minmax(0,1fr) 250px}
-  .cfHead{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .cfCard.hasOnline{box-sizing:border-box;width:min(1160px,calc(100vw - 32px));
+    height:min(720px,calc(100vh - 32px));height:min(720px,calc(100dvh - 32px));max-height:none;
+    display:flex;flex-direction:column;overflow:hidden}
+  .cfLayout{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(0,1fr);flex:1;min-height:0}
+  .cfHead{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.08);flex:none}
   .cfHead h1{font-size:17px;margin:0;letter-spacing:1px}
+  .cfHead .cfMainBack{padding:7px 10px;white-space:nowrap}
   .cfHead .dot{width:8px;height:8px;border-radius:50%;background:#777}
   .cfHead .dot.on{background:#3ddc84;box-shadow:0 0 10px #3ddc84}
   .cfHead .sp{flex:1}
-  .cfBody{padding:18px 20px;min-width:0}
-  .cfOnlinePanel{padding:18px 14px;border-left:1px solid rgba(255,255,255,.08);min-width:0}
+  .cfMain{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .cfMainNav{display:flex;align-items:center;gap:4px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.08);flex:none}
+  .cfMainNav button.cf{padding:8px 15px;white-space:nowrap}
+  .cfMainNav button.cf.active{background:rgba(245,179,33,.14);border-color:rgba(245,179,33,.5);color:#f5c76d}
+  .cfBody{padding:18px 20px;min-width:0;min-height:0;overflow-y:auto;scrollbar-gutter:stable;flex:1}
+  .cfOnlinePanel{padding:18px 14px;border-left:1px solid rgba(255,255,255,.08);min-width:0;min-height:0;
+    overflow-y:auto;scrollbar-gutter:stable}
+  .cfAccountCard{display:flex;gap:10px;align-items:flex-start;padding:12px;margin-bottom:16px;border:1px solid rgba(245,179,33,.25);border-radius:10px;background:rgba(245,179,33,.06)}
+  .cfAccountAvatar{display:flex;align-items:center;justify-content:center;flex:none;width:42px;height:42px;border-radius:8px;background:rgba(255,255,255,.06);color:#f5c76d;font-weight:700}
+  .cfAccountAvatar .cfRankIcon{width:38px;height:38px}
+  .cfAccountInfo{min-width:0;flex:1}
+  .cfAccountRank{font-size:11px;color:#aaa;margin:5px 0 8px}
+  .cfAccountCard button.cf{padding:5px 9px;font-size:11px}
+  .cfIdentityEmail{font-size:11px;color:#999;overflow-wrap:anywhere;font-weight:400}
   .cfOnlineTitle{font-size:13px;font-weight:700;color:#f5b321;margin-bottom:10px}
-  .cfOnlineList{max-height:48vh;overflow-y:auto}
+  .cfOnlineList{overflow:visible}
   .cfOnlineEntry{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
   .cfOnlineInfo{flex:1;min-width:0}
-  .cfOnlineName{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cfOnlineName{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
   .cfOnlineState{font-size:11px;color:#9a9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
   .cfOnlineFollow{flex:none;padding:5px 8px!important;font-size:11px!important}
+  .cfSocialTabs{display:flex;gap:6px;margin-bottom:10px}
+  .cfSocialTabs button{flex:1;padding:7px 5px!important;font-size:11px!important}
+  .cfSocialTabs button.cf.active{background:#f5b321;color:#231909;border-color:#f5b321;font-weight:700}
+  .cfSocialSearch{width:100%;box-sizing:border-box;margin-bottom:8px}
+  .cfSocialActions{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+  .cfSocialActions button{padding:4px 7px!important;font-size:10px!important}
+  .cfStatusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#777;vertical-align:middle}
+  .cfStatusDot.online{background:#3ddc84}.cfStatusDot.room{background:#f5c241}
+  .cfStatusDot.battle{background:#ed5961}.cfStatusDot.offline{background:#777}
+  .cfSocialRequest{padding:8px;border:1px solid rgba(245,179,33,.25);border-radius:8px;margin:8px 0;font-size:12px}
   #cfInvitePopup{position:fixed;top:16px;right:16px;z-index:100001;width:min(340px,calc(100vw - 32px));
     padding:16px;border:1px solid rgba(245,179,33,.55);border-radius:12px;
     background:#211b13;box-shadow:0 16px 48px rgba(0,0,0,.55);color:#eee;
@@ -45,8 +70,11 @@
   #cfInvitePopup .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
   .cfOnlineEmpty{font-size:12px;color:#888;padding:8px 0}
   .cfMenuOnline{margin-top:18px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.2)}
-  .cfMenuOnline .cfOnlineList{max-height:180px}
-  @media(max-width:720px){.cfLayout{grid-template-columns:1fr}.cfOnlinePanel{border-left:0;border-top:1px solid rgba(255,255,255,.08)}}
+  .cfMenuOnline .cfOnlineList{max-height:180px;overflow-y:auto}
+  @media(max-width:720px){.cfLayout{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(150px,34%)}
+    .cfOnlinePanel{border-left:0;border-top:1px solid rgba(255,255,255,.08)}}
+  @media(max-width:560px){.cfHead{gap:7px;padding:11px}.cfHead h1{font-size:13px}.cfHead .cfNetStatus{font-size:10px}
+    .cfMainNav{padding:8px 10px;overflow-x:auto}.cfMainNav button.cf{padding:7px 10px}}
   .cfRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   input.cf,select.cf{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);color:#eee;
     border-radius:8px;padding:9px 11px;font-size:13px;outline:none}
@@ -65,13 +93,15 @@
   .cfItem .nm small{display:flex;align-items:center;gap:5px;margin-top:4px;color:#aaa;font-size:11px}
   .cfItem .meta{font-size:12px;color:#9a9a9a}
   .cfEmpty{padding:26px;text-align:center;color:#888;font-size:13px}
+  .cfLobbyEmpty{min-height:170px;display:flex;align-items:center;justify-content:center}
+  .cfSectionTitle{font-size:12px;font-weight:700;letter-spacing:1px;color:#aaa;margin:0 0 10px}
   .cfTeams{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .cfTeam{border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
   .cfTeam h3{margin:0;padding:10px 14px;font-size:14px;letter-spacing:1px;background:rgba(255,255,255,.05)}
   .cfSlot{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
   .cfSlot.mine{background:rgba(245,179,33,.12)}
   .cfSlot .st{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px;margin-left:auto;font-size:11px;color:#999}
-  .cfSlotName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cfSlotName{flex:1;min-width:0;overflow-wrap:anywhere}
   button.cf.cfKick{flex:none;padding:4px 8px;font-size:11px;color:#ff9b9b;border-color:rgba(255,120,120,.4)}
   .cfSlot.empty{color:#8c8c8c;cursor:pointer}
   .cfSlot.empty:hover{background:rgba(255,255,255,.06);color:#ddd}
@@ -104,6 +134,8 @@
   .cfProfileStat{min-width:0;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.03)}
   .cfProfileLabel{font-size:12px;color:#999;margin-bottom:5px}
   .cfProfileValue{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+  .cfProfileIdentity{display:block;font-size:17px;font-weight:700;margin:0 0 16px;overflow-wrap:anywhere}
+  .cfProfileIdentity .cfIdentityEmail{font-size:13px}
   @media(max-width:560px){.cfProfileGrid,.cfTeams{grid-template-columns:1fr}}
   `;
 
@@ -128,6 +160,18 @@
     return mark;
   }
 
+  function playerIdentity(name, email, cls) {
+    const identity = el('span', cls || '');
+    identity.appendChild(document.createTextNode(name || '—'));
+    if (email) {
+      const address = el('span', 'cfIdentityEmail');
+      address.textContent = ` · ${email}`;
+      identity.appendChild(address);
+      identity.title = `${name} · ${email}`;
+    }
+    return identity;
+  }
+
   function renderOnlineList(panel, room, follow) {
     panel.innerHTML = '';
     const players = room.online || [];
@@ -137,8 +181,7 @@
     for (const player of players) {
       const entry = el('div', 'cfOnlineEntry');
       const info = el('div', 'cfOnlineInfo');
-      const name = el('div', 'cfOnlineName');
-      name.textContent = player.name;
+      const name = playerIdentity(player.name, player.email, 'cfOnlineName');
       const state = el('div', 'cfOnlineState');
       state.textContent = player.roomId ? (follow ? `在房间：${player.roomName || '未命名房间'}` : '在房间') : '空闲';
       info.append(name, state);
@@ -205,10 +248,207 @@
       let inviteStatus = '';
       let lobbyNotice = '';
       let activeInviteId = null;
+      let socialTab = 'friends';
+      let socialFriends = [];
+      let socialPlayers = [];
+      let socialRequests = [];
+      let socialQuery = '';
+      let socialOffset = 0;
+      let socialNextCursor = null;
+      let socialError = '';
+      let socialNotice = '';
+      let socialSeq = 0;
+      let socialTimer = null;
+      let autoJoinIntent = null;
+      let autoJoinPending = false;
+      try { autoJoinIntent = JSON.parse(sessionStorage.getItem('ship_invite_intent') || 'null'); } catch (_) {}
       const invitePopup = el('div');
       invitePopup.id = 'cfInvitePopup';
       invitePopup.style.display = 'none';
       document.body.appendChild(invitePopup);
+
+      async function socialRequest(path, method = 'GET', body) {
+        const response = await fetch('/api/social/' + path, {
+          method, credentials: 'same-origin',
+          headers: { ...CFTabSession.headers(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '操作失败');
+        return data;
+      }
+
+      async function loadSocial() {
+        if (!authUser || !room.registered) return;
+        const seq = ++socialSeq;
+        try {
+          const [friends, players, requests] = await Promise.all([
+            socialRequest('friends'),
+            socialRequest(`players?q=${encodeURIComponent(socialQuery)}&cursor=${socialOffset}&limit=30`),
+            socialRequest('requests'),
+          ]);
+          if (seq !== socialSeq) return;
+          socialFriends = friends.friends || [];
+          socialPlayers = players.players || [];
+          socialNextCursor = players.nextCursor;
+          socialRequests = requests.requests || [];
+          socialError = '';
+        } catch (error) { if (seq === socialSeq) socialError = error.message; }
+        const panel = root.querySelector('.cfOnlinePanel');
+        if (panel && seq === socialSeq) renderSocialPanel(panel);
+      }
+
+      function scheduleSocial() {
+        clearTimeout(socialTimer);
+        socialTimer = setTimeout(() => { void loadSocial(); }, 250);
+      }
+
+      async function socialAction(action) {
+        try {
+          const message = await action();
+          if (typeof message === 'string') { inviteStatus = message; socialNotice = message; }
+          await loadSocial();
+          if (room.room && !root.classList.contains('hidden')) render();
+        } catch (error) { window.alert(error.message); }
+      }
+
+      function relationFor(accountId) {
+        if (socialFriends.some((p) => p.accountId === accountId)) return 'friend';
+        const request = socialRequests.find((r) => r.senderId === accountId || r.recipientId === accountId);
+        return request ? (request.senderId === authUser?.id ? 'sent' : 'received') : 'none';
+      }
+
+      function formatSeen(timestamp) {
+        return timestamp ? new Date(timestamp).toLocaleString('zh-CN', {
+          timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+        }) : '从未上线';
+      }
+
+      function renderSocialPanel(panel) {
+        const searchFocused = document.activeElement?.classList?.contains('cfSocialSearch');
+        const caret = searchFocused ? document.activeElement.selectionStart : null;
+        const scrollTop = panel.scrollTop;
+        panel.replaceChildren();
+        if (authUser) {
+          const account = el('div', 'cfAccountCard');
+          const avatar = el('div', 'cfAccountAvatar');
+          const icon = global.CFRankIcons?.icon(rankProfile?.profile?.name);
+          if (icon) avatar.appendChild(icon);
+          else avatar.textContent = authUser.name?.slice(0, 1) || '我';
+          const info = el('div', 'cfAccountInfo');
+          info.appendChild(playerIdentity(authUser.name, authUser.email, 'cfOnlineName'));
+          info.appendChild(el('div', 'cfAccountRank', rankProfile?.profile?.name || '个人账号'));
+          const logout = el('button', 'cf ghost', '退出账号');
+          logout.onclick = signOut;
+          info.appendChild(logout);
+          account.append(avatar, info);
+          panel.appendChild(account);
+        }
+        const received = socialRequests.filter((r) => r.recipientId === authUser?.id);
+        const tabs = el('div', 'cfSocialTabs');
+        for (const [key, title] of [['friends', `好友 ${socialFriends.length}`], ['players', '所有玩家']]) {
+          const button = el('button', 'cf ghost' + (socialTab === key ? ' active' : ''), title);
+          button.onclick = () => { socialTab = key; renderSocialPanel(panel); };
+          tabs.appendChild(button);
+        }
+        panel.appendChild(tabs);
+        if (socialError) panel.appendChild(el('div', 'cfTip bad', esc(socialError)));
+        if (socialNotice) panel.appendChild(el('div', 'cfTip', esc(socialNotice)));
+        if (socialTab === 'friends' && received.length) {
+          panel.appendChild(el('div', 'cfOnlineTitle', `收到的好友申请 · ${received.length}`));
+          for (const request of received) {
+            const item = el('div', 'cfSocialRequest');
+            item.appendChild(document.createTextNode(`${request.senderName} 请求加你为好友`));
+            const actions = el('div', 'cfSocialActions');
+            for (const [label, accept] of [['接受', true], ['拒绝', false]]) {
+              const button = el('button', 'cf ghost', label);
+              button.onclick = () => void socialAction(async () => {
+                await socialRequest(`requests/${encodeURIComponent(request.id)}/respond`, 'POST', { accept });
+              });
+              actions.appendChild(button);
+            }
+            item.appendChild(actions);
+            panel.appendChild(item);
+          }
+        }
+        if (socialTab === 'players') {
+          const input = el('input', 'cf cfSocialSearch');
+          input.placeholder = '搜索注册玩家'; input.value = socialQuery;
+          input.oninput = () => {
+            socialQuery = input.value; socialOffset = 0;
+            clearTimeout(socialTimer); socialTimer = setTimeout(() => void loadSocial(), 300);
+          };
+          panel.appendChild(input);
+          if (searchFocused) {
+            input.focus();
+            if (caret !== null) input.setSelectionRange(caret, caret);
+          }
+        }
+        const list = el('div', 'cfOnlineList');
+        const people = socialTab === 'friends' ? socialFriends : socialPlayers;
+        if (!people.length) list.appendChild(el('div', 'cfOnlineEmpty', socialTab === 'friends' ? '还没有好友' : '没有找到玩家'));
+        const ordered = socialTab === 'friends' ? [...people].sort((a, b) => {
+          const order = { online: 0, room: 1, battle: 2, offline: 3 };
+          const state = (p) => room.online.find((o) => o.accountId === p.accountId)?.status || 'offline';
+          return order[state(a)] - order[state(b)] || a.name.localeCompare(b.name);
+        }) : people;
+        for (const person of ordered) {
+          const live = room.online.find((p) => p.accountId === person.accountId);
+          const status = live?.status || 'offline';
+          const labels = { online: '在线', room: '在房间', battle: '战斗中', offline: '离线' };
+          const entry = el('div', 'cfOnlineEntry');
+          const info = el('div', 'cfOnlineInfo');
+          const name = playerIdentity(person.name, person.email, 'cfOnlineName');
+          const state = el('div', 'cfOnlineState');
+          const dot = el('span', 'cfStatusDot ' + status); dot.setAttribute('aria-label', labels[status]);
+          state.append(dot, document.createTextNode(`${labels[status]} · 最近上线 ${formatSeen(person.lastOnlineAt)}`));
+          state.title = `最近上线 ${formatSeen(person.lastOnlineAt)}` +
+            (status === 'offline' && person.lastSeenAt ? ` · 最后在线 ${formatSeen(person.lastSeenAt)}` : '');
+          info.append(name, state);
+          const actions = el('div', 'cfSocialActions');
+          const relation = socialTab === 'friends' ? 'friend' : person.relation;
+          if (relation === 'none') {
+            const add = el('button', 'cf ghost', '加好友');
+            add.onclick = () => void socialAction(() => socialRequest('requests', 'POST', { targetAccountId: person.accountId }));
+            actions.appendChild(add);
+          } else if (relation === 'sent') actions.appendChild(el('span', 'cfTip', '申请已发出'));
+          else if (relation === 'received') actions.appendChild(el('span', 'cfTip', '请处理申请'));
+          if (relation === 'friend') {
+            const remove = el('button', 'cf ghost', '删除');
+            remove.onclick = () => {
+              if (window.confirm(`确定删除好友 ${person.name}？`)) void socialAction(() => socialRequest(`friends/${encodeURIComponent(person.accountId)}`, 'DELETE'));
+            };
+            actions.appendChild(remove);
+          }
+          if ((status === 'online' && room.room) || (status === 'offline' && relation === 'friend')) {
+            const invite = el('button', 'cf ghost', status === 'offline' ? (room.room ? '邮件入房' : '邀请上线') : '邀请');
+            invite.onclick = () => void socialAction(async () => {
+              const result = await socialRequest('invitations', 'POST', { targetAccountId: person.accountId });
+              return result.mode === 'online' ? `已向 ${person.name} 发送房间邀请` : `已向 ${person.name} 发送邀请邮件`;
+            });
+            actions.appendChild(invite);
+          }
+          info.appendChild(actions);
+          entry.appendChild(info);
+          list.appendChild(entry);
+        }
+        panel.appendChild(list);
+        if (socialTab === 'players') {
+          const pages = el('div', 'cfSocialActions');
+          if (socialOffset > 0) {
+            const prev = el('button', 'cf ghost', '上一页');
+            prev.onclick = () => { socialOffset = Math.max(0, socialOffset - 30); void loadSocial(); };
+            pages.appendChild(prev);
+          }
+          if (socialNextCursor !== null) {
+            const next = el('button', 'cf ghost', '下一页');
+            next.onclick = () => { socialOffset = socialNextCursor; void loadSocial(); };
+            pages.appendChild(next);
+          }
+          panel.appendChild(pages);
+        }
+        panel.scrollTop = scrollTop;
+      }
 
       function dismissInvite(inviteId) {
         if (inviteId && inviteId !== activeInviteId) return;
@@ -307,23 +547,11 @@
       }
 
       function renderRank(body) {
-        const back = el('button', 'cf ghost', '返回');
-        back.onclick = () => { rankOpen = false; render(); };
-        body.appendChild(back);
+        body.appendChild(el('h2', 'cfXpTitle', '个人信息'));
         if (rankLoadError) body.appendChild(el('div', 'cfTip bad', esc(rankLoadError)));
         if (!rankProfile) { body.appendChild(el('div', 'cfEmpty', '正在加载个人信息…')); return; }
-        body.appendChild(el('h2', 'cfXpTitle', '个人信息'));
         const account = rankProfile.account || authUser;
-        const details = el('div', 'cfProfileGrid');
-        for (const [label, value] of [['昵称', account.name], ['邮箱', account.email]]) {
-          const item = el('div', 'cfProfileStat');
-          item.appendChild(el('div', 'cfProfileLabel', label));
-          const content = el('div', 'cfProfileValue');
-          content.textContent = value || '—';
-          item.appendChild(content);
-          details.appendChild(item);
-        }
-        body.appendChild(details);
+        body.appendChild(playerIdentity(account.name, account.email, 'cfProfileIdentity'));
         const p = rankProfile.profile;
         const card = el('div', 'cfXpCard');
         const rankTitle = el('div', 'cfXpTitle');
@@ -391,6 +619,8 @@
         lastSettlement = null;
         try { await authRequest('logout', {}); } catch (_) {}
         authUser = null;
+        socialFriends = []; socialPlayers = []; socialRequests = [];
+        socialNotice = '';
         authMode = 'login';
         render();
       }
@@ -514,6 +744,7 @@
       /* ---------------- 大厅 ---------------- */
       function renderLobby(body) {
         if (lobbyNotice) body.appendChild(el('div', 'cfTip bad', esc(lobbyNotice)));
+        body.appendChild(el('div', 'cfSectionTitle', '创建房间'));
         const row = el('div', 'cfRow');
         const nm = el('input', 'cf'); nm.placeholder = '房间名'; nm.value = (room.name || '玩家') + '的房间';
         const size = el('select', 'cf');
@@ -535,16 +766,18 @@
         mk.onclick = () => room.create({ name: nm.value.trim() || '运输船房间', size: +size.value, goal: +goal.value, bots: +bots.value, team: 'BL' });
         rf.onclick = () => room.refresh();
 
+        body.appendChild(el('div', 'cfSectionTitle', '可加入的房间'));
         const list = el('div', 'cfList');
         const rs = room.rooms || [];
-        if (!rs.length) list.appendChild(el('div', 'cfEmpty', '暂无房间，点「创建房间」开一个'));
+        if (!rs.length) list.appendChild(el('div', 'cfEmpty cfLobbyEmpty', '暂无房间，点「创建房间」开一个'));
         rs.forEach((r) => {
           const it = el('div', 'cfItem');
           const name = el('div', 'nm', esc(r.name));
           const host = r.players.find((p) => p.netId === r.host);
           if (host) {
             const hostLine = el('small');
-            hostLine.append(document.createTextNode(`房主 ${host.name} · `), rankMark(host.rank));
+            hostLine.append(document.createTextNode('房主 '), playerIdentity(host.name, host.email),
+              document.createTextNode(' · '), rankMark(host.rank));
             name.appendChild(hostLine);
           }
           it.appendChild(name);
@@ -570,6 +803,20 @@
           };
           return button;
         };
+        const friendButton = (player) => {
+          if (!player.accountId || player.accountId === authUser?.id) return null;
+          const relation = relationFor(player.accountId);
+          if (relation === 'friend' || relation === 'sent') return null;
+          const button = el('button', 'cf ghost cfOnlineFollow', relation === 'received' ? '处理好友申请' : '加好友');
+          button.onclick = () => {
+            if (relation === 'received') {
+              socialTab = 'friends';
+              const panel = root.querySelector('.cfOnlinePanel');
+              if (panel) renderSocialPanel(panel);
+            } else void socialAction(() => socialRequest('requests', 'POST', { targetAccountId: player.accountId }));
+          };
+          return button;
+        };
         body.appendChild(el('div', 'cfRow',
           `<div class="cfTip"><b style="font-size:14px">${esc(r.name)}</b> · ${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}</div>`));
 
@@ -582,7 +829,7 @@
             const p = slots[tk][i];
             const s = el('div', 'cfSlot' + (p ? (p.netId === room.selfId ? ' mine' : '') : ' empty'));
             if (p) {
-              s.appendChild(el('span', 'cfSlotName', esc(p.name)));
+              s.appendChild(playerIdentity(p.name, p.email, 'cfSlotName'));
               const tags = el('span', 'st');
               if (p.rank) tags.appendChild(rankMark(p.rank));
               if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
@@ -596,6 +843,8 @@
                 tags.appendChild(out);
               }
               s.appendChild(tags);
+              const add = friendButton(p);
+              if (add) s.appendChild(add);
               if (room.isHost && p.netId !== room.selfId) s.appendChild(kickButton(p));
             } else {
               s.appendChild(el('span', null, canChangeTeam ? '空位 · 点击加入' : '空位'));
@@ -612,10 +861,11 @@
           body.appendChild(el('div', 'cfTip', '等待选择阵营：'));
           for (const p of unassigned) {
             const row = el('div', 'cfSlot');
-            const name = el('span', 'cfSlotName');
-            name.textContent = p.name;
+            const name = playerIdentity(p.name, p.email, 'cfSlotName');
             row.appendChild(name);
             if (p.rank) row.appendChild(rankMark(p.rank));
+            const add = friendButton(p);
+            if (add) row.appendChild(add);
             if (room.isHost) row.appendChild(kickButton(p));
             body.appendChild(row);
           }
@@ -655,10 +905,7 @@
       function renderLeaderboard(body) {
         const periods = [['all', '历史累计'], ['month', '月榜'], ['week', '周榜'], ['day', '日榜'], ['live', '实时榜']];
         const metrics = [['kills', '最高击杀'], ['headshots', '最多爆头'], ['kd', '击杀/死亡比'], ['deaths', '最多死亡']];
-        const back = el('button', 'cf ghost', room.room ? '返回房间' : '返回大厅');
-        back.onclick = () => { leaderboardOpen = false; render(); };
-        body.appendChild(el('div', 'cfRow'));
-        body.lastChild.appendChild(back);
+        body.appendChild(el('h2', 'cfXpTitle', '排行榜'));
 
         const periodTabs = el('div', 'cfRankTabs');
         for (const [value, label] of periods) {
@@ -698,7 +945,8 @@
           const values = [player.rank, player.name, null, player.kills, player.headshots, player.deaths, Number(player.kd).toFixed(2)];
           values.forEach((value, index) => {
             const cell = el('td', index === focusIndex ? 'focus' : '');
-            if (index === 2) cell.appendChild(rankMark(player.militaryRank));
+            if (index === 1) cell.appendChild(playerIdentity(player.name, player.email));
+            else if (index === 2) cell.appendChild(rankMark(player.militaryRank));
             else cell.textContent = String(value);
             tr.appendChild(cell);
           });
@@ -717,58 +965,62 @@
 
       function render() {
         const view = !room.registered ? 'connect' : rankOpen ? 'rank' : leaderboardOpen ? 'leaderboard' : (room.room ? 'room' : 'lobby');
+        const previousBodyScroll = root.querySelector('.cfBody')?.scrollTop || 0;
+        const previousPanelScroll = root.querySelector('.cfOnlinePanel')?.scrollTop || 0;
         root.innerHTML = '';
         const card = el('div', 'cfCard' + (room.registered ? ' hasOnline' : ''));
 
         const head = el('div', 'cfHead');
-        const dot = el('span', 'dot' + (netOpen() ? ' on' : ''));
-        head.appendChild(dot);
-        head.appendChild(el('h1', null, opts.title || '运输船 · 联机对战'));
-        head.appendChild(el('span', 'sp'));
-        if (authUser) {
-          const profileHead = el('span', 'cfTip');
-          profileHead.appendChild(document.createTextNode(authUser.name));
-          if (rankProfile) profileHead.append(document.createTextNode(' · '), rankMark(rankProfile.profile.name));
-          head.appendChild(profileHead);
-          if (room.registered) {
-            const rankButton = el('button', 'cf ghost', rankOpen ? '关闭个人信息' : '个人信息');
-            rankButton.onclick = () => { rankOpen = !rankOpen; leaderboardOpen = false; render(); if (rankOpen) void loadRank(true); };
-            head.appendChild(rankButton);
-            const leaderboardButton = el('button', 'cf ghost', leaderboardOpen ? '关闭排行' : '排行榜');
-            leaderboardButton.onclick = () => {
-              leaderboardOpen = !leaderboardOpen;
-              rankOpen = false;
-              rankError = '';
-              render();
-              if (leaderboardOpen) void loadLeaderboard();
-            };
-            head.appendChild(leaderboardButton);
-          }
-          const logout = el('button', 'cf ghost', '退出账号');
-          logout.onclick = signOut;
-          head.appendChild(logout);
-        }
-        head.appendChild(el('span', 'cfTip cfNetStatus', netOpen() ? '已连接 · 延迟 ' + room.net.ping + 'ms' : '未连接'));
         if (opts.onBack) {
-          const back = el('button', 'cf ghost', '返回主菜单');
+          const back = el('button', 'cf ghost cfMainBack', '← 主菜单');
           back.onclick = () => {
             if (room.room) room.leave();
+            rankOpen = false;
             leaderboardOpen = false;
             root.classList.add('hidden');
             opts.onBack();
           };
           head.appendChild(back);
         }
+        const dot = el('span', 'dot' + (netOpen() ? ' on' : ''));
+        head.appendChild(dot);
+        head.appendChild(el('h1', null, opts.title || '运输船 · 联机对战'));
+        head.appendChild(el('span', 'sp'));
+        if (authUser && !room.registered) {
+          const logout = el('button', 'cf ghost', '退出账号');
+          logout.onclick = signOut;
+          head.appendChild(logout);
+        }
+        head.appendChild(el('span', 'cfTip cfNetStatus', netOpen() ? '已连接 · 延迟 ' + room.net.ping + 'ms' : '未连接'));
         card.appendChild(head);
 
         const layout = el('div', room.registered ? 'cfLayout' : '');
         const body = el('div', 'cfBody');
-        layout.appendChild(body);
         if (room.registered) {
+          const main = el('main', 'cfMain');
+          const nav = el('nav', 'cfMainNav');
+          nav.setAttribute('aria-label', '联机页面');
+          for (const [key, label] of [['rooms', room.room ? '当前房间' : '房间列表'], ['leaderboard', '排行榜'], ['rank', '个人信息']]) {
+            const active = key === 'rank' ? rankOpen : key === 'leaderboard' ? leaderboardOpen : !rankOpen && !leaderboardOpen;
+            const button = el('button', 'cf ghost' + (active ? ' active' : ''), label);
+            button.setAttribute('aria-current', active ? 'page' : 'false');
+            button.onclick = () => {
+              if (active) return;
+              rankOpen = key === 'rank';
+              leaderboardOpen = key === 'leaderboard';
+              if (leaderboardOpen) rankError = '';
+              render();
+              if (rankOpen) void loadRank(true);
+              else if (leaderboardOpen) void loadLeaderboard();
+            };
+            nav.appendChild(button);
+          }
+          main.append(nav, body);
+          layout.appendChild(main);
           const onlineSide = el('aside', 'cfOnlinePanel');
-          renderOnlineList(onlineSide, room, true);
+          renderSocialPanel(onlineSide);
           layout.appendChild(onlineSide);
-        }
+        } else layout.appendChild(body);
         card.appendChild(layout);
 
         if (view === 'connect') renderConnect(body);
@@ -783,6 +1035,9 @@
         }
 
         root.appendChild(card);
+        if (view === lastView) body.scrollTop = previousBodyScroll;
+        const panel = root.querySelector('.cfOnlinePanel');
+        if (panel) panel.scrollTop = previousPanelScroll;
 
         if (view === 'lobby' && lastView !== 'lobby') room.refresh();
         lastView = view;
@@ -790,15 +1045,29 @@
 
       room.on('open', render);
       room.on('close', () => { dismissInvite(); inviteStatus = ''; render(); });
-      room.on('hello', render);
-      room.on('joined', () => { lastSettlement = null; lobbyNotice = ''; render(); });
+      room.on('hello', () => { render(); void loadSocial(); });
+      room.on('joined', () => { autoJoinPending = false; lastSettlement = null; lobbyNotice = ''; render(); });
       room.on('kicked', (m) => {
         lobbyNotice = m.reason || '你已被房主移出房间';
         lastSettlement = null;
         root.classList.remove('hidden');
         render();
       });
-      room.on('list', render);
+      room.on('list', () => {
+        if (autoJoinIntent && !room.room) {
+          const intent = autoJoinIntent;
+          autoJoinIntent = null;
+          sessionStorage.removeItem('ship_invite_intent');
+          if (intent.roomId) {
+            const target = room.rooms.find((r) => r.id === intent.roomId && r.instanceId === intent.instanceId);
+            if (target) {
+              autoJoinPending = true;
+              room.join(intent.roomId, intent.instanceId);
+            } else lobbyNotice = '邀请的房间已不存在，已返回房间列表';
+          }
+        }
+        render();
+      });
       room.on('room', () => { if (room.room) dismissInvite(); render(); });
       room.on('invite', showInvite);
       room.on('invite_cancel', (m) => dismissInvite(m.inviteId));
@@ -815,11 +1084,19 @@
       });
       room.on('presence', () => {
         const onlineSide = root.querySelector('.cfOnlinePanel');
-        if (onlineSide) renderOnlineList(onlineSide, room, true);
+        if (onlineSide) renderSocialPanel(onlineSide);
+        scheduleSocial();
       });
+      room.net.on('social_changed', () => { void loadSocial(); });
       room.on('start', (m) => { lastSettlement = null; root.classList.add('hidden'); opts.onStart && opts.onStart(m); });
       room.on('end', (m) => { lastSettlement = m; root.classList.remove('hidden'); render(); void loadRank(rankOpen); });
       room.on('err', (m) => {
+        if (autoJoinPending) {
+          autoJoinPending = false;
+          lobbyNotice = `${m.msg || '无法加入房间'}，已返回房间列表`;
+          render();
+          return;
+        }
         if (!room.registered) {
           showAuthError(m.msg || '连接失败');
         } else { window.alert(m.msg || '出错了'); render(); }

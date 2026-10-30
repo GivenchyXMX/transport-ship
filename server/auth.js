@@ -139,7 +139,7 @@ function makeAuth() {
     const account = { id: crypto.randomUUID(), email, name: pending.name };
     db.exec('BEGIN');
     try {
-      db.prepare('INSERT INTO accounts VALUES (?,?,?,?,?,?,?)').run(account.id, email, account.name,
+    db.prepare('INSERT INTO accounts (id,email,name,name_key,created_at,password_salt,password_hash) VALUES (?,?,?,?,?,?,?)').run(account.id, email, account.name,
         pending.name_key, Date.now(), pending.password_salt, pending.password_hash);
       db.prepare('DELETE FROM auth_codes WHERE email=?').run(email);
       db.exec('COMMIT');
