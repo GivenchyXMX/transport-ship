@@ -1,0 +1,36 @@
+web/testbed.html
+  s_3c73414532f3ac::t_912dadbcb1ba3c 33
+transport-ship-mp.html
+  s_3c73414532f3ac::t_912dadbcb1ba3c 5136
+server/server.js
+  s_3c73414532f3ac::t_912dadbcb1ba3c 47,50,785-786
+server/leaderboard.js
+  s_3c73414532f3ac::t_912dadbcb1ba3c 24,28,43,79,96
+web/ui.js
+  s_3c73414532f3ac::t_819a7cf38ff1c7 65,79-81,123-130,329-331,543-550,587,693,695,698-704,729-732
+  s_3c73414532f3ac::t_e68442d452c792 73,92-93,107,618
+web/mp.js
+  s_3c73414532f3ac::t_c1b6e0f0423ad4 71-75,150-170,336,435
+docs/军衔与经验系统设计.md
+  s_3c73414532f3ac::t_0b17a264ef309b 118,126
+docs/游戏玩法.md
+  s_3c73414532f3ac::t_0b17a264ef309b 51-52
+web/rank-icons.js
+  s_3c73414532f3ac::t_912dadbcb1ba3c 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2f0f54f90db28c392e34909e91f9eb57a570770f",
+  "prompts": {},
+  "sessions": {
+    "s_3c73414532f3ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17de3-87e5-7292-afc8-59406832c299",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
