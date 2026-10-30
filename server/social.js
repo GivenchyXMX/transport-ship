@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const nodemailer = require('nodemailer');
+const { rankOf } = require('./rank');
 
 const INVITE_TTL = 30 * 60 * 1000;
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -53,6 +54,7 @@ function makeSocial() {
   }
   function publicAccount(row) {
     return { accountId: row.id, name: row.name, email: row.email,
+      militaryRank: rankOf(row.xp_total).name,
       lastOnlineAt: row.last_online_at || null, lastSeenAt: row.last_seen_at || null };
   }
   function players(me, query, cursor, limit) {
@@ -60,15 +62,19 @@ function makeSocial() {
     const offset = Number.isSafeInteger(Number(cursor)) ? Math.max(0, Math.min(100000, Number(cursor))) : 0;
     const size = Math.max(1, Math.min(50, Math.floor(Number(limit) || 30)));
     const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
-    const rows = db.prepare(`SELECT id,name,email,last_online_at,last_seen_at FROM accounts
-      WHERE id<>? AND name LIKE ? ESCAPE '\\' ORDER BY name_key LIMIT ? OFFSET ?`)
+    const rows = db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,
+      COALESCE(rp.xp_total,0) AS xp_total FROM accounts a
+      LEFT JOIN rank_profiles rp ON rp.account_id=a.id
+      WHERE a.id<>? AND a.name LIKE ? ESCAPE '\\' ORDER BY a.name_key LIMIT ? OFFSET ?`)
       .all(me, like, size + 1, offset);
     return { players: rows.slice(0, size).map((row) => ({ ...publicAccount(row), relation: relation(me, row.id) })),
       nextCursor: rows.length > size ? offset + size : null };
   }
   function friends(me) {
-    return db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at FROM friendships f
+    return db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,
+      COALESCE(rp.xp_total,0) AS xp_total FROM friendships f
       JOIN accounts a ON a.id=CASE WHEN f.account_low=? THEN f.account_high ELSE f.account_low END
+      LEFT JOIN rank_profiles rp ON rp.account_id=a.id
       WHERE f.account_low=? OR f.account_high=? ORDER BY a.name_key`).all(me, me, me).map(publicAccount);
   }
   function requests(me) {

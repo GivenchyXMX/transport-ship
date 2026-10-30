@@ -42,13 +42,21 @@
   .cfAccountAvatar .cfRankIcon{width:38px;height:38px}
   .cfAccountInfo{min-width:0;flex:1}
   .cfAccountRank{font-size:11px;color:#aaa;margin:5px 0 8px}
+  .cfAccountActions{display:flex;gap:6px;flex-wrap:wrap}
   .cfAccountCard button.cf{padding:5px 9px;font-size:11px}
+  .cfAccountCard button.cf.cfBgmToggle{display:inline-flex;align-items:center;justify-content:center;width:32px;height:30px;padding:0}
+  .cfBgmToggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .cfBgmToggle.isOn{color:#f5c76d!important;border-color:rgba(245,179,33,.7)!important;background:rgba(245,179,33,.18)!important;box-shadow:0 0 10px rgba(245,179,33,.14)}
+  .cfBgmToggle.isOff{color:#888!important;border-color:rgba(255,255,255,.16)!important;background:rgba(255,255,255,.03)!important}
+  .cfBgmToggle.isOn .cfBgmSlash,.cfBgmToggle.isOff .cfBgmWave{display:none}
   .cfIdentityEmail{font-size:11px;color:#999;overflow-wrap:anywhere;font-weight:400}
   .cfOnlineTitle{font-size:13px;font-weight:700;color:#f5b321;margin-bottom:10px}
   .cfOnlineList{overflow:visible}
   .cfOnlineEntry{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
   .cfOnlineInfo{flex:1;min-width:0}
   .cfOnlineName{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+  .cfOnlineRank{margin-top:3px}
+  .cfOnlineRank .cfRankIcon{width:18px;height:18px}
   .cfOnlineState{font-size:11px;color:#9a9a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
   .cfOnlineFollow{flex:none;padding:5px 8px!important;font-size:11px!important}
   .cfSocialTabs{display:flex;gap:6px;margin-bottom:10px}
@@ -95,6 +103,14 @@
   .cfEmpty{padding:26px;text-align:center;color:#888;font-size:13px}
   .cfLobbyEmpty{min-height:170px;display:flex;align-items:center;justify-content:center}
   .cfSectionTitle{font-size:12px;font-weight:700;letter-spacing:1px;color:#aaa;margin:0 0 10px}
+  .cfRoomIntro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+  .cfRoomIntro .cfTip{min-width:0;flex:1}
+  .cfMapPoster{flex:none;width:200px;overflow:hidden;border-radius:8px;
+    border:1px solid rgba(245,179,33,.35);background:#171d20;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+  .cfMapPoster img{display:block;width:100%;height:auto;aspect-ratio:2984/1394}
+  .cfMapPoster span{display:block;padding:5px 9px;background:rgba(0,0,0,.65);
+    font-size:11px;font-weight:700;letter-spacing:.5px}
+  @media(max-width:560px){.cfMapPoster{width:140px}.cfRoomIntro{gap:10px}}
   .cfTeams{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .cfTeam{border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
   .cfTeam h3{margin:0;padding:10px 14px;font-size:14px;letter-spacing:1px;background:rgba(255,255,255,.05)}
@@ -227,6 +243,51 @@
         document.body.appendChild(root);
       }
 
+      const bgmTracks = {
+        lobby: '/web/assets/audio/cf-classic-lobby-unbound.mp3',
+        room: '/web/assets/audio/cf-classic-room-metrohead.mp3',
+      };
+      const bgm = new Audio();
+      bgm.loop = true;
+      bgm.preload = 'none';
+      bgm.volume = 0.22;
+      let bgmEnabled = true;
+      let bgmScene = 'off';
+      let loadedBgmScene = '';
+
+      function syncBgm(scene = bgmScene) {
+        bgmScene = scene;
+        if (!bgmEnabled || scene === 'off' || document.hidden) { bgm.pause(); return; }
+        if (loadedBgmScene !== scene) {
+          bgm.pause();
+          bgm.src = bgmTracks[scene];
+          loadedBgmScene = scene;
+        }
+        if (bgm.paused) void bgm.play().catch(() => {});
+      }
+
+      function setBgmEnabled(enabled) {
+        bgmEnabled = enabled;
+        syncBgm();
+      }
+
+      function updateBgmButton(button) {
+        button.classList.toggle('isOn', bgmEnabled);
+        button.classList.toggle('isOff', !bgmEnabled);
+        button.setAttribute('aria-pressed', String(bgmEnabled));
+        button.setAttribute('aria-label', bgmEnabled ? '关闭背景音乐' : '开启背景音乐');
+        button.title = bgmEnabled ? '背景音乐已开启，点击关闭' : '背景音乐已关闭，点击开启';
+      }
+
+      // 浏览器可能拦截自动播放；首次交互时再尝试启动当前场景的音乐。
+      root.addEventListener('pointerdown', (event) => {
+        if (!event.target.closest('.cfBgmToggle')) syncBgm();
+      });
+      root.addEventListener('keydown', (event) => {
+        if (!event.target.closest('.cfBgmToggle')) syncBgm();
+      });
+      document.addEventListener('visibilitychange', () => syncBgm());
+
       const netOpen = () => !!(room.net && room.net.open);
       let authUser = null;
       let authChecking = false;
@@ -338,9 +399,23 @@
           const info = el('div', 'cfAccountInfo');
           info.appendChild(playerIdentity(authUser.name, authUser.email, 'cfOnlineName'));
           info.appendChild(el('div', 'cfAccountRank', rankProfile?.profile?.name || '个人账号'));
+          const actions = el('div', 'cfAccountActions');
+          const music = el('button', 'cf ghost cfBgmToggle', `<svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 17V5l7-2v12M9 7l7-2"/><ellipse cx="6.5" cy="17.5" rx="2.5" ry="1.5"/>
+            <ellipse cx="13.5" cy="15.5" rx="2.5" ry="1.5"/>
+            <path class="cfBgmWave" d="M19 7c1.5 2 1.5 5 0 7"/>
+            <path class="cfBgmSlash" d="M3 3l18 18"/>
+          </svg>`);
+          updateBgmButton(music);
+          music.onclick = () => {
+            setBgmEnabled(!bgmEnabled);
+            updateBgmButton(music);
+          };
+          actions.appendChild(music);
           const logout = el('button', 'cf ghost', '退出账号');
           logout.onclick = signOut;
-          info.appendChild(logout);
+          actions.appendChild(logout);
+          info.appendChild(actions);
           account.append(avatar, info);
           panel.appendChild(account);
         }
@@ -399,12 +474,16 @@
           const entry = el('div', 'cfOnlineEntry');
           const info = el('div', 'cfOnlineInfo');
           const name = playerIdentity(person.name, person.email, 'cfOnlineName');
+          const militaryRank = person.militaryRank ? el('div', 'cfOnlineRank') : null;
+          if (militaryRank) militaryRank.appendChild(rankMark(person.militaryRank));
           const state = el('div', 'cfOnlineState');
           const dot = el('span', 'cfStatusDot ' + status); dot.setAttribute('aria-label', labels[status]);
           state.append(dot, document.createTextNode(`${labels[status]} · 最近上线 ${formatSeen(person.lastOnlineAt)}`));
           state.title = `最近上线 ${formatSeen(person.lastOnlineAt)}` +
             (status === 'offline' && person.lastSeenAt ? ` · 最后在线 ${formatSeen(person.lastSeenAt)}` : '');
-          info.append(name, state);
+          info.appendChild(name);
+          if (militaryRank) info.appendChild(militaryRank);
+          info.appendChild(state);
           const actions = el('div', 'cfSocialActions');
           const relation = socialTab === 'friends' ? 'friend' : person.relation;
           if (relation === 'none') {
@@ -817,8 +896,12 @@
           };
           return button;
         };
-        body.appendChild(el('div', 'cfRow',
-          `<div class="cfTip"><b style="font-size:14px">${esc(r.name)}</b> · ${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}</div>`));
+        const intro = el('div', 'cfRoomIntro');
+        intro.appendChild(el('div', 'cfTip',
+          `<b style="font-size:14px">${esc(r.name)}</b><br>${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}`));
+        intro.appendChild(el('aside', 'cfMapPoster',
+          '<img src="/web/assets/maps/cf-transport-ship.png?v=2" alt="穿越火线运输船地图海报"><span>当前地图 · 运输船</span>'));
+        body.appendChild(intro);
 
         const teams = el('div', 'cfTeams');
         const slots = room.slots();
@@ -978,6 +1061,7 @@
             rankOpen = false;
             leaderboardOpen = false;
             root.classList.add('hidden');
+            syncBgm('off');
             opts.onBack();
           };
           head.appendChild(back);
@@ -1035,6 +1119,8 @@
         }
 
         root.appendChild(card);
+        syncBgm(root.classList.contains('hidden') || !authUser || !room.registered
+          ? 'off' : room.room ? 'room' : 'lobby');
         if (view === lastView) body.scrollTop = previousBodyScroll;
         const panel = root.querySelector('.cfOnlinePanel');
         if (panel) panel.scrollTop = previousPanelScroll;
@@ -1088,8 +1174,8 @@
         scheduleSocial();
       });
       room.net.on('social_changed', () => { void loadSocial(); });
-      room.on('start', (m) => { lastSettlement = null; root.classList.add('hidden'); opts.onStart && opts.onStart(m); });
-      room.on('end', (m) => { lastSettlement = m; root.classList.remove('hidden'); render(); void loadRank(rankOpen); });
+      room.on('start', (m) => { lastSettlement = null; root.classList.add('hidden'); syncBgm('off'); opts.onStart && opts.onStart(m); });
+      room.on('end', (m) => { lastSettlement = m; root.classList.remove('hidden'); render(); void loadRank(rankOpen); void loadSocial(); });
       room.on('err', (m) => {
         if (autoJoinPending) {
           autoJoinPending = false;
@@ -1122,7 +1208,7 @@
           authChecking = false;
           render();
         },
-        close() { root.classList.add('hidden'); },
+        close() { root.classList.add('hidden'); syncBgm('off'); },
         render,
         root,
       };

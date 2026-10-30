@@ -46,6 +46,9 @@ const ROOT_DIR   = path.resolve(__dirname, '..');
 const PUBLIC_FILES = new Set([
   '/index.html', '/transport-ship-mp.html', '/invite.html', '/web/testbed.html',
   '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
+  '/web/assets/audio/cf-classic-lobby-unbound.mp3',
+  '/web/assets/audio/cf-classic-room-metrohead.mp3',
+  '/web/assets/maps/cf-transport-ship.png',
 ]);
 const auth = makeAuth();
 const social = makeSocial();
@@ -847,6 +850,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.mp3': 'audio/mpeg',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
@@ -912,14 +916,14 @@ const server = http.createServer((req, res) => {
 
   // 远程部署时绝不能把 server/、依赖、日志或配置文件作为静态文件公开。
   const rankIconFile = /^\/web\/assets\/ranks\/source\/[0-9]{3}_[\p{Script=Han}0-9]+\.jpg$/u.test(rel);
-  if (!PUBLIC_FILES.has(rel) && !rankIconFile) { res.writeHead(404).end('404'); return; }
+  if (!PUBLIC_FILES.has(rel) && !rankIconFile) { res.writeHead(404, { 'Cache-Control': 'no-store' }).end('404'); return; }
   const filePath = path.join(ROOT_DIR, rel.slice(1));
 
   fs.readFile(filePath, (err, buf) => {
-    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('404'); return; }
+    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end('404'); return; }
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': rel === '/invite.html' ? 'no-store' : 'no-cache',
+      'Cache-Control': rel === '/invite.html' ? 'no-store' : rel.endsWith('.mp3') ? 'public, max-age=86400' : 'no-cache',
       ...(rel === '/invite.html' ? { 'Referrer-Policy': 'no-referrer' } : {}),
       'X-Content-Type-Options': 'nosniff',
     });
