@@ -1,0 +1,19 @@
+web/room.js
+  s_e27c1a2d49a806::t_418ff36181d8b5 93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8bbda5103795b62268d117bbbb4e112ce33a7563",
+  "prompts": {},
+  "sessions": {
+    "s_e27c1a2d49a806": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18dc7-50dd-7192-b437-f13558adcba4",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
