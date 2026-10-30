@@ -1,0 +1,19 @@
+transport-ship-mp.html
+  s_3c73414532f3ac::t_a87a4e475a5fa5 5131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3f0cfdf52c14f5f4aa7c28ebcc8feca727861d85",
+  "prompts": {},
+  "sessions": {
+    "s_3c73414532f3ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17de3-87e5-7292-afc8-59406832c299",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
