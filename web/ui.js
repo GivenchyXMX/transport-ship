@@ -258,7 +258,7 @@
       const mapInfo = (id) => room.maps.find((map) => map.id === id)
         || (id === DEFAULT_MAP.id ? DEFAULT_MAP : { id, displayName: id || '未知地图', poster: DEFAULT_MAP.poster });
       let selectedMapId = DEFAULT_MAP.id;
-      let selectedSize = '5', selectedGoal = '50', selectedBots = '0';
+      let selectedSize = '5', selectedGoal = '50';
       let dropdownSeq = 0;
 
       if (!document.getElementById('cfMpStyle')) {
@@ -574,14 +574,17 @@
         const list = el('div', 'cfOnlineList');
         const people = socialTab === 'friends' ? socialFriends : socialPlayers;
         if (!people.length) list.appendChild(el('div', 'cfOnlineEmpty', socialTab === 'friends' ? '还没有好友' : '没有找到玩家'));
-        const ordered = socialTab === 'friends' ? [...people].sort((a, b) => {
-          const order = { online: 0, room: 1, battle: 2, offline: 3 };
-          const state = (p) => room.online.find((o) => o.accountId === p.accountId)?.status || 'offline';
-          return order[state(a)] - order[state(b)] || a.name.localeCompare(b.name);
-        }) : people;
+        const isOnline = (person) => {
+          const status = room.online.find((player) => player.accountId === person.accountId)?.status || person.status;
+          return status === 'online' || status === 'room' || status === 'battle';
+        };
+        const ordered = [...people].sort((a, b) => Number(isOnline(b)) - Number(isOnline(a))
+          || a.name.localeCompare(b.name, 'zh-CN') || a.accountId.localeCompare(b.accountId));
         for (const person of ordered) {
           const live = room.online.find((p) => p.accountId === person.accountId);
-          const status = live?.status || 'offline';
+          const status = live?.status || person.status || 'offline';
+          const targetRoomId = live?.roomId || person.roomId;
+          const targetRoomName = live?.roomName || person.roomName;
           const labels = { online: '在线', room: '在房间', battle: '战斗中', offline: '离线' };
           const entry = el('div', 'cfOnlineEntry');
           const info = el('div', 'cfOnlineInfo');
@@ -590,7 +593,7 @@
           if (militaryRank) militaryRank.appendChild(rankMark(person.militaryRank));
           const state = el('div', 'cfOnlineState');
           const dot = el('span', 'cfStatusDot ' + status); dot.setAttribute('aria-label', labels[status]);
-          state.append(dot, document.createTextNode(`${labels[status]} · 最近上线 ${formatSeen(person.lastOnlineAt)}`));
+          state.append(dot, document.createTextNode(`${labels[status]}${targetRoomId ? ` · ${targetRoomName || '未命名房间'}` : ''} · 最近上线 ${formatSeen(person.lastOnlineAt)}`));
           state.title = `最近上线 ${formatSeen(person.lastOnlineAt)}` +
             (status === 'offline' && person.lastSeenAt ? ` · 最后在线 ${formatSeen(person.lastSeenAt)}` : '');
           info.appendChild(name);
@@ -598,6 +601,13 @@
           info.appendChild(state);
           const actions = el('div', 'cfSocialActions');
           const relation = socialTab === 'friends' ? 'friend' : person.relation;
+          if (targetRoomId && person.accountId !== authUser?.id && targetRoomId !== room.room?.id &&
+              (status === 'room' || status === 'battle')) {
+            const follow = el('button', 'cf ghost', '跟随');
+            follow.title = `尝试加入${person.name}所在的房间`;
+            follow.onclick = () => room.join(targetRoomId);
+            actions.appendChild(follow);
+          }
           if (relation === 'none') {
             const add = el('button', 'cf ghost', '加好友');
             add.onclick = () => void socialAction(() => socialRequest('requests', 'POST', { targetAccountId: person.accountId }));
@@ -946,14 +956,12 @@
         size.onchange = () => { selectedSize = size.value; };
         const goal = dropdown('选择目标分数', [['30', '目标 30'], ['50', '目标 50'], ['100', '目标 100']], selectedGoal);
         goal.onchange = () => { selectedGoal = goal.value; };
-        const bots = dropdown('选择补位机器人', [['0', '不补 bot'], ['2', '补 2 bot'], ['4', '补 4 bot'], ['6', '补 6 bot']], selectedBots);
-        bots.onchange = () => { selectedBots = bots.value; };
         const mk = el('button', 'cf', '创建房间');
         const rf = el('button', 'cf ghost', '刷新');
-        row.append(nm, mapSelect, size, goal, bots, mk, rf);
+        row.append(nm, mapSelect, size, goal, mk, rf);
         body.appendChild(row);
         mk.onclick = () => room.create({ name: nm.value.trim() || `${mapInfo(mapSelect.value).displayName}房间`, mapId: mapSelect.value,
-          size: +size.value, goal: +goal.value, bots: +bots.value, team: 'BL' });
+          size: +size.value, goal: +goal.value, team: 'BL' });
         rf.onclick = () => room.refresh();
 
         body.appendChild(el('div', 'cfSectionTitle', '可加入的房间'));
@@ -971,7 +979,7 @@
             name.appendChild(hostLine);
           }
           it.appendChild(name);
-          it.appendChild(el('div', 'meta', `${esc(mapInfo(r.map).displayName)} · ${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · bot ' + r.bots : ''}`));
+          it.appendChild(el('div', 'meta', `${esc(mapInfo(r.map).displayName)} · ${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人`));
           it.appendChild(el('div', 'meta', r.state === 'playing' ? (r.players.length < r.size * 2 ? '进行中 · 可中途加入' : '进行中 · 已满') : '等待中'));
           it.onclick = () => room.join(r.id);
           list.appendChild(it);
@@ -1009,7 +1017,7 @@
         };
         const intro = el('div', 'cfRoomIntro');
         intro.appendChild(el('div', 'cfTip',
-          `<b style="font-size:14px">${esc(r.name)}</b><br>${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}`));
+          `<b style="font-size:14px">${esc(r.name)}</b><br>${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人`));
         const selectedMap = mapInfo(r.map);
         intro.appendChild(el('aside', 'cfMapPoster',
           `<img src="${esc(selectedMap.poster)}" alt="${esc(selectedMap.displayName)}地图海报"><span>当前地图 · ${esc(selectedMap.displayName)}</span>`));
@@ -1071,7 +1079,7 @@
           r.state === 'playing' ? (choosingBattle ? '对局进行中：请先选择有空位的阵营，再点击「加入战斗」。' : '对局进行中。')
             : !hasBothTeams ? '潜伏者和保卫者阵营都至少需要 1 名玩家才能开始；加入房间会自动分配到人数较少的阵营。'
                             : full ? '房间已满，房主可以开始对战。'
-                                   : '两边都已有玩家，房主可以开始对战；缺人时按房间配置补 bot。'));
+                                   : '两边都已有玩家，房主可以开始对战。'));
         if (inviteStatus) body.appendChild(el('div', 'cfTip', esc(inviteStatus)));
 
         const foot = el('div', 'cfFoot');

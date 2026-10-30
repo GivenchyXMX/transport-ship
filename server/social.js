@@ -57,16 +57,19 @@ function makeSocial() {
       militaryRank: rankOf(row.xp_total).name,
       lastOnlineAt: row.last_online_at || null, lastSeenAt: row.last_seen_at || null };
   }
-  function players(me, query, cursor, limit) {
+  function players(me, query, cursor, limit, onlineAccountIds = []) {
     const q = String(query || '').trim().slice(0, 24);
     const offset = Number.isSafeInteger(Number(cursor)) ? Math.max(0, Math.min(100000, Number(cursor))) : 0;
     const size = Math.max(1, Math.min(50, Math.floor(Number(limit) || 30)));
     const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    const online = JSON.stringify(onlineAccountIds);
     const rows = db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,
       COALESCE(rp.xp_total,0) AS xp_total FROM accounts a
       LEFT JOIN rank_profiles rp ON rp.account_id=a.id
-      WHERE a.id<>? AND a.name LIKE ? ESCAPE '\\' ORDER BY a.name_key LIMIT ? OFFSET ?`)
-      .all(me, like, size + 1, offset);
+      WHERE a.id<>? AND a.name LIKE ? ESCAPE '\\'
+      ORDER BY CASE WHEN a.id IN (SELECT value FROM json_each(?)) THEN 0 ELSE 1 END,
+        a.name_key, a.id LIMIT ? OFFSET ?`)
+      .all(me, like, online, size + 1, offset);
     return { players: rows.slice(0, size).map((row) => ({ ...publicAccount(row), relation: relation(me, row.id) })),
       nextCursor: rows.length > size ? offset + size : null };
   }

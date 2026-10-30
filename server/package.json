@@ -10,7 +10,7 @@
   "scripts": {
     "build:game": "node ../scripts/build-game.cjs",
     "check:game": "node ../scripts/build-game.cjs --check",
-    "test:data": "node --test test/maps.test.js test/radar.test.js test/bot.test.js test/hooks.test.js test/room-selection.test.js",
+    "test:data": "node --experimental-sqlite --test test/maps.test.js test/radar.test.js test/bot.test.js test/hooks.test.js test/room-selection.test.js test/social-order.test.js",
     "prestart": "npm run build:game",
     "start": "node server.js"
   },

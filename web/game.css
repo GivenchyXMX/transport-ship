@@ -144,13 +144,21 @@ button{font-family:inherit}
 .go:hover{filter:brightness(1.12)}
 .go.sec{background:rgba(255,255,255,.1);color:#fff;font-size:15px;letter-spacing:4px;padding:10px}
 .note{font-size:12px;color:#8c959c;margin-top:10px;line-height:1.6}
+.trainingPanel{margin:12px 0;padding:10px 12px;border:1px solid rgba(245,179,33,.28);background:rgba(245,179,33,.055)}
+.trainingPanel label{display:flex;align-items:center;gap:9px;cursor:pointer;color:#dfe4e8;font-size:13px}
+.trainingPanel input{accent-color:var(--accent);width:16px;height:16px;margin:0;flex:none}
+.trainingToggle span{font-weight:700}
+.trainingToggle small{margin-left:auto;color:var(--hudDim);font-size:11px}
+.trainingOptions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)}
+.trainingOptions[hidden]{display:none}
+.trainingPanel[hidden]{display:none}
 #loading{position:absolute;inset:0;pointer-events:auto;background:#05070a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
 #loading .t{font-size:40px;font-weight:900;letter-spacing:10px}
 #loading .s{font-family:var(--num);letter-spacing:4px;color:var(--hudDim)}
 #loading .bar{width:min(420px,70vw);height:4px;background:rgba(255,255,255,.1)}
 #loading .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
 #loading .tip{font-size:13px;color:#8c959c;max-width:70vw;text-align:center}
-.pauseBox{width:min(520px,94vw);padding:24px;background:var(--panel2);border:1px solid rgba(255,255,255,.1)}
+.pauseBox{width:min(520px,94vw);max-height:94vh;overflow:auto;padding:24px;background:var(--panel2);border:1px solid rgba(255,255,255,.1)}
 .pauseBox h2{margin:0 0 16px;letter-spacing:6px;font-size:22px}
 .endBox{width:min(900px,96vw);padding:24px 26px;background:var(--panel2);border:1px solid rgba(255,255,255,.12)}
 .endBox .res{font-size:52px;font-weight:900;letter-spacing:14px;text-align:center}

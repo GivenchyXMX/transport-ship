@@ -167,7 +167,10 @@ async function handleSocial(req, res, rel) {
   try {
     const url = new URL(req.url, 'http://localhost');
     if (rel === '/api/social/players' && req.method === 'GET') {
-      const data = social.players(me.id, url.searchParams.get('q'), url.searchParams.get('cursor'), url.searchParams.get('limit'));
+      const onlineIds = [...new Set([...clients.values()]
+        .filter((player) => player.accountId && player.ws.readyState === player.ws.OPEN)
+        .map((player) => player.accountId))];
+      const data = social.players(me.id, url.searchParams.get('q'), url.searchParams.get('cursor'), url.searchParams.get('limit'), onlineIds);
       return json(res, 200, { ...data, players: data.players.map((p) => ({ ...p, ...presenceFor(p.accountId) })) });
     }
     if (rel === '/api/social/friends' && req.method === 'GET')
@@ -417,7 +420,7 @@ function createRoom(cfg, selectedMap) {
     mapVersion: selectedMap.version,
     size: clamp(Math.round(cfg.size ?? 5), 1, 8),
     goal: clamp(Math.round(cfg.goal ?? 40), 5, 200),
-    bots: clamp(Math.round(cfg.bots ?? 0), 0, 16),
+    bots: 0,
     state: 'lobby',
     host: null,
     players: new Map(),
@@ -1317,6 +1320,7 @@ function handle(player, msg) {
     case 'bots': {
       // 只有房主可以广播 bot 快照，原样转发给房间内其他人
       if (!room || room.state !== 'playing') return;
+      if (!room.botActors.size) return;
       if (room.host !== player.netId) return;
       room.botState = Array.isArray(msg.a) ? msg.a.slice(0, 32) : [];
       broadcast(room, { t: 'bots', a: room.botState }, player.ws);
