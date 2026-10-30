@@ -26,6 +26,7 @@ const { makeLeaderboard, PERIODS } = require('./leaderboard');
 const { makeRank } = require('./rank');
 const { makeSocial } = require('./social');
 const combat = require('./combat');
+const maps = require('./maps');
 
 /* ------------------------------- 常量 ------------------------------------ */
 const PORT       = Number(process.env.PORT || 8787);
@@ -45,6 +46,7 @@ const WEAPONS    = new Set(['ak47', 'm4a1', 'awm', 'mp5', 'deagle', 'knife', 'he
 const ROOT_DIR   = path.resolve(__dirname, '..');
 const PUBLIC_FILES = new Set([
   '/index.html', '/transport-ship-mp.html', '/invite.html', '/web/testbed.html',
+  '/web/game.css', '/web/game.js',
   '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
   '/web/assets/audio/cf-classic-lobby-unbound.mp3',
   '/web/assets/audio/cf-classic-room-metrohead.mp3',
@@ -273,6 +275,11 @@ const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const rid = () => 'R' + (++roomSeq).toString(36).toUpperCase();
 const pid = () => 'p:' + ++playerSeq;
 const randInt = (n) => Math.floor(Math.random() * n);
+const roomMap = (room) => {
+  const map = maps.get(room.map);
+  if (!map) throw new Error('房间地图不存在: ' + room.map);
+  return map;
+};
 
 function teamCounts(room) {
   const c = { BL: 0, GR: 0 };
@@ -301,6 +308,7 @@ function roomBrief(room) {
     instanceId: room.instanceId,
     name: room.name,
     map: room.map,
+    mapVersion: room.mapVersion,
     size: room.size,
     goal: room.goal,
     bots: room.bots,
@@ -334,7 +342,7 @@ function playerState(player) {
 }
 
 function sendRoomList(ws) {
-  send(ws, { t: 'list', rooms: [...rooms.values()].map(roomBrief) });
+  send(ws, { t: 'list', rooms: [...rooms.values()].map(roomBrief), maps: maps.list() });
 }
 
 function presenceFor(accountId) {
@@ -399,13 +407,14 @@ function inviteOnline(player, target) {
 }
 
 /* --------------------------- 房间生命周期 -------------------------------- */
-function createRoom(cfg) {
+function createRoom(cfg, selectedMap) {
   const id = rid();
   const room = {
     id,
     instanceId: crypto.randomUUID(),
-    name: String(cfg.name || '运输船 房间').slice(0, 24),
-    map: 'transport-ship',
+    name: String(cfg.name || `${selectedMap.rules.displayName} 房间`).slice(0, 24),
+    map: selectedMap.id,
+    mapVersion: selectedMap.version,
     size: clamp(Math.round(cfg.size ?? 5), 1, 8),
     goal: clamp(Math.round(cfg.goal ?? 40), 5, 200),
     bots: clamp(Math.round(cfg.bots ?? 0), 0, 16),
@@ -532,6 +541,8 @@ function startMatch(room) {
     send(p.ws, {
       t: 'start',
       roomId: room.id,
+      map: room.map,
+      mapVersion: room.mapVersion,
       matchId: room.match.id,
       selfId: p.netId,
       host: room.host,
@@ -679,7 +690,7 @@ function applyShot(room, attacker, msg) {
   state.mag--;
 
   const origin = [attacker.last.p[0], attacker.last.p[1] + (attacker.last.c ? 1.05 : 1.62), attacker.last.p[2]];
-  const wall = combat.wallDistance(origin, direction, def.range);
+  const wall = combat.wallDistance(roomMap(room).walls, origin, direction, def.range);
   const rewind = Math.min(160, Math.max(40, (attacker.rtt || 0) / 2 + 50));
   let best = null;
   for (const victim of room.players.values()) {
@@ -712,7 +723,7 @@ function applyMelee(room, attacker, msg) {
     let best = null;
     for (const offset of [0, .12, -.12, .24, -.24]) {
       const direction = combat.aimDirection(yaw + offset, pitch);
-      const wall = combat.wallDistance(origin, direction, range);
+      const wall = combat.wallDistance(roomMap(room).walls, origin, direction, range);
       for (const victim of room.players.values()) {
         if (victim === attacker || victim.team === attacker.team || !victim.alive || !victim.last || now() < victim.protectUntil) continue;
         const hit = combat.targetHit(origin, direction, victim.last.p, !!victim.last.c, Math.min(range, wall));
@@ -740,6 +751,7 @@ function throwGrenade(room, attacker) {
 }
 
 function updateGrenades(room, t) {
+  const walls = roomMap(room).walls;
   const remaining = [];
   for (const nade of room.grenades || []) {
     const elapsed = Math.min(.1, Math.max(0, (t - nade.at) / 1000));
@@ -752,7 +764,7 @@ function updateGrenades(room, t) {
       const length = Math.hypot(...displacement);
       if (length > 0) {
         const direction = displacement.map((v) => v / length);
-        if (combat.wallDistance(nade.p, direction, length + .07) < length + .07) {
+        if (combat.wallDistance(walls, nade.p, direction, length + .07) < length + .07) {
           nade.v = nade.v.map((v) => -v * .45);
         } else for (let axis = 0; axis < 3; axis++) nade.p[axis] += displacement[axis];
       }
@@ -772,7 +784,7 @@ function updateGrenades(room, t) {
       const distance = Math.hypot(chest[0] - nade.p[0], chest[1] - nade.p[1], chest[2] - nade.p[2]);
       if (distance > 7.5 || distance < 1e-5) continue;
       const direction = chest.map((v, i) => (v - nade.p[i]) / distance);
-      const blocked = combat.wallDistance(nade.p, direction, distance - .3) < distance - .3;
+      const blocked = combat.wallDistance(walls, nade.p, direction, distance - .3) < distance - .3;
       const damage = 115 * Math.pow(1 - distance / 7.5, 1.1) * (blocked ? .2 : 1);
       if (damage > 1) applyDamage(room, owner, victim, damage, 'chest', 'he', t);
     }
@@ -787,7 +799,7 @@ function handleRespawn(room, player, msg) {
   if (player.alive && !player.joining) return;
   if (t < (player.respawnAt || 0) - 800) return; // 还没到复活时间，忽略（防提前复活）
   const claimed = Array.isArray(msg.p) && msg.p.length === 3 && msg.p.every(Number.isFinite) ? msg.p : null;
-  const spawns = combat.SPAWNS[player.team];
+  const spawns = roomMap(room).spawns[player.team];
   if (!claimed || !spawns) return;
   const nearest = spawns.reduce((best, point) =>
     Math.hypot(point[0] - claimed[0], point[2] - claimed[2]) < Math.hypot(best[0] - claimed[0], best[2] - claimed[2]) ? point : best);
@@ -1031,8 +1043,10 @@ function handle(player, msg) {
     }
 
     case 'create': {
+      const selectedMap = maps.resolveSelection(msg.mapId);
+      if (!selectedMap) { send(player.ws, { t: 'err', msg: '所选地图不可用' }); return; }
       if (room) leaveRoom(player);
-      const r = createRoom(msg);
+      const r = createRoom(msg, selectedMap);
       joinRoom(player, r, msg.team === 'BL' || msg.team === 'GR' ? msg.team : 'BL');
       broadcast(r, { t: 'room', room: roomBrief(r) });
       sendRoomListToLobbyIdle();
@@ -1109,7 +1123,8 @@ function handle(player, msg) {
       const joinedAt = now();
       send(player.ws, {
         t: 'start', late: true,
-        roomId: room.id, selfId: player.netId, host: room.host, team: player.team,
+        roomId: room.id, map: room.map, mapVersion: room.mapVersion,
+        selfId: player.netId, host: room.host, team: player.team,
         matchId: room.match?.id,
         size: room.size, goal: room.goal, duration: Math.max(0, (room.endsAt - joinedAt) / 1000),
         serverTime: joinedAt, endsAt: room.endsAt, score: { ...room.score },
@@ -1172,7 +1187,9 @@ function handle(player, msg) {
       if (!Array.isArray(msg.p) || msg.p.length !== 3 || !msg.p.every(Number.isFinite)
           || !Number.isFinite(msg.y) || !Number.isFinite(msg.pi)) return;
       const p = msg.p;
-      if (Math.abs(p[0]) > 36.5 || p[1] < -.5 || p[1] > 8 || Math.abs(p[2]) > 12.4) return;
+      const bounds = roomMap(room).bounds;
+      if (p[0] < bounds.minX || p[0] > bounds.maxX || p[1] < bounds.minY || p[1] > bounds.maxY
+          || p[2] < bounds.minZ || p[2] > bounds.maxZ) return;
       const old = player.last?.p;
       if (old) {
         const dt = Math.min(.25, Math.max(0, (t - player.combat.movedAt) / 1000));
@@ -1187,7 +1204,7 @@ function handle(player, msg) {
           const origin = [old[0], old[1] + .9, old[2]];
           const direction = [(p[0] - old[0]) / distance, (p[1] - old[1]) / distance,
             (p[2] - old[2]) / distance];
-          if (combat.wallDistance(origin, direction, distance) < distance - .015) {
+          if (combat.wallDistance(roomMap(room).walls, origin, direction, distance) < distance - .015) {
             send(player.ws, { t: 'correct', p: old });
             return;
           }

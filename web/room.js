@@ -6,12 +6,12 @@
  *
  *  事件：
  *    open / close / err
- *    list   {rooms}                 大厅房间列表刷新
+ *    list   {rooms,maps}            大厅房间与可选地图列表刷新
  *    presence {players}            在线玩家及所在房间刷新
  *    room   {room}                  当前房间状态变化（有人进出 / 改阵营 / 改准备）
  *    joined {roomId}
  *    kicked {roomId,reason}         被房主移出房间
- *    start  {selfId,team,size,goal,players[],bots[]}   对局开始
+ *    start  {map,mapVersion,selfId,team,size,goal,players[],bots[]}   对局开始
  *    member_join {player}          战斗中加入的玩家
  *    member_leave {netId}          战斗中离开的玩家
  *    invite {inviteId,fromName,roomName,expiresAt}  收到房间邀请
@@ -36,6 +36,7 @@
       this.name = '';
       this.registered = false;
       this.rooms = [];
+      this.maps = [];
       this.online = [];
       this.room = null;
       this.me = null;
@@ -44,7 +45,7 @@
 
       net.on('welcome', (m) => { this.selfId = m.netId; this._e('welcome', m); });
       net.on('hello',   (m) => { this.name = m.name; this.registered = true; this._e('hello', m); });
-      net.on('list',    (m) => { this.rooms = m.rooms; this._e('list', m); });
+      net.on('list',    (m) => { this.rooms = m.rooms; this.maps = Array.isArray(m.maps) ? m.maps : []; this._e('list', m); });
       net.on('presence', (m) => { this.online = Array.isArray(m.players) ? m.players : []; this._e('presence', m); });
       net.on('room',    (m) => {
         this.room = m.room;
@@ -89,7 +90,7 @@
       this.net.send({ t: 'hello', name: this.name, primary: primary || 'ak47' });
     }
     refresh() { this.net.send({ t: 'list' }); }
-    create(cfg) { this.net.send({ t: 'create', name: cfg.name, size: cfg.size, goal: cfg.goal, bots: cfg.bots || 0, team: cfg.team || 'BL' }); }
+    create(cfg) { this.net.send({ t: 'create', name: cfg.name, mapId: cfg.mapId, size: cfg.size, goal: cfg.goal, bots: cfg.bots || 0, team: cfg.team || 'BL' }); }
     join(roomId, instanceId) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}) }); }
     leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; }
 

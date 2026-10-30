@@ -42,6 +42,17 @@ transport-ship/
 ├── index.html                  首页
 ├── transport-ship-mp.html      游戏页面
 ├── web/                        联机页面、同步逻辑与测试台
+├── src/vendor/                 第三方后处理代码
+├── src/client/core/            渲染、碰撞寻路和主循环
+├── src/client/maps/            地图注册表和运输船地图包
+├── src/client/actors/          玩家、士兵模型和 bot
+├── src/client/combat/          武器与射击表现
+├── src/client/graphics/        场景特效
+├── src/client/audio/           音频合成
+├── src/client/ui/              HUD、雷达和触控
+├── src/client/multiplayer/     联机钩子接口
+├── shared/maps/                两端共用的地图配置
+├── scripts/build-game.cjs      生成 web/game.js
 ├── server/                     HTTP、WebSocket、账号和战绩服务
 ├── deploy/                     Linux 安装、启动、停止与配置示例
 ├── docs/                       玩法、部署和军衔说明
@@ -50,3 +61,5 @@ transport-ship/
 ```
 
 开发调试可访问 `/web/testbed.html`，健康检查可访问 `/health`。服务默认监听 `0.0.0.0:8787`，正式对外提供邮箱登录时请按[自行部署](docs/自行部署.md)配置 HTTPS。运行数据默认写入 `.runtime/`，其中的数据库和邮件配置应由部署者妥善保管。
+
+修改 `src/client/` 或 `shared/maps/` 后，在 `server/` 目录运行 `npm run build:game` 重新生成 `web/game.js`；`npm start` 会自动执行这一步。直接运行 `node server.js` 或使用系统启动器时，读取仓库中已有的 `web/game.js`。数据层回归可运行 `npm run test:data`，产物一致性可运行 `npm run check:game`。拆分状态见[多地图扩展与功能拆分技术方案](docs/多地图扩展与功能拆分技术方案.md)，人工验收步骤见[架构拆分黑盒测试清单](docs/架构拆分黑盒测试清单.md)。

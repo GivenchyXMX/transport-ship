@@ -1,14 +1,14 @@
 /* =============================================================================
  *  mp.js —— 把单机运输船接成 5v5 联机
  *
- *  核心思路（不改原版一行业务代码，全部靠"包一层"实现）
+ *  核心思路：通过 game.hooks 注册联机适配，不直接覆盖游戏实例方法。
  *  ---------------------------------------------------------------------------
  *  1) window.__game 是原版暴露出来的游戏实例（init() 最后一行），一切都从它入手。
  *
  *  2) 通过 game.player 反查到原版内部类（名字被压缩过，但拿得到引用）：
  *        ActorBase = Object.getPrototypeOf(Object.getPrototypeOf(player)).constructor  // _r
  *        Soldier   = player.soldier.constructor                            // hc
- *        Bot       = 原版 startMatch 生成的 bot 实例的 constructor          // Fa
+ *        Bot       = 原版 startMatch 生成的 bot 实例的 constructor          // BotActor
  *        Weapon    = player.inv[0].constructor                              // _s
  *     然后 Ghost extends ActorBase —— 远端玩家就是一个"不会自己思考的 Actor"。
  *     因为它真的被放进 game.actors，原版的子弹命中、雷达、记分牌、名字条全部自动生效。
@@ -19,7 +19,7 @@
  *        血量/死亡/比分  → 服务器是唯一权威（真人玩家）
  *        bot 的一切      → 房主客户端是权威（因为服务器没有地图和 AI）
  *
- *  4) 四个钩子：
+ *  4) 主要钩子：
  *        game.startMatch  → 原版生成完 player + bot 后，把 bot 换成人 / 幽灵
  *        game.damage     → 区分"我打别人""别人打我"，决定本地裁决还是上报
  *        game.spawnActor  → 我复活时告诉服务器，服务器再广播给别人
@@ -137,18 +137,18 @@
   /*  2. 挂钩原版                                                        */
   /* ------------------------------------------------------------------ */
   function hookGame(game) {
-    origStartMatch = game.startMatch.bind(game);
-    origKill = game.kill.bind(game);
-    origDamage = game.damage.bind(game);
-    origFireWeapon = game.fireWeapon.bind(game);
-    origTraceBullet = game.traceBullet.bind(game);
-    origMelee = game.melee.bind(game);
-    origThrowGrenade = game.throwGrenade.bind(game);
-    origSpawnActor = game.spawnActor.bind(game);
-    origQuitToMenu = game.quitToMenu.bind(game);
+    origStartMatch = game.hooks.original('startMatch');
+    origKill = game.hooks.original('kill');
+    origDamage = game.hooks.original('damage');
+    origFireWeapon = game.hooks.original('fireWeapon');
+    origTraceBullet = game.hooks.original('traceBullet');
+    origMelee = game.hooks.original('melee');
+    origThrowGrenade = game.hooks.original('throwGrenade');
+    origSpawnActor = game.hooks.original('spawnActor');
+    origQuitToMenu = game.hooks.original('quitToMenu');
 
-    const origScoreboard = game.hud.scoreboard.bind(game.hud);
-    game.hud.scoreboard = function (visible, actors, selfId, score) {
+    const origScoreboard = game.hooks.original('hud.scoreboard');
+    game.hooks.replace('hud.scoreboard', function (visible, actors, selfId, score) {
       origScoreboard(visible, actors, selfId, score);
       if (!visible || !MP.active) return;
       for (const team of ['BL', 'GR']) {
@@ -166,10 +166,10 @@
           cell.insertBefore(mark, cell.firstChild);
         });
       }
-    };
+    });
 
     /* ---- 2.1 startMatch：原版建好 player + bot 后，换成真人名单 ---- */
-    game.startMatch = function () {
+    game.hooks.replace('startMatch', function () {
       const r = origStartMatch();
       if (MP.pendingStart) {
         const p = MP.pendingStart;
@@ -177,10 +177,10 @@
         try { buildRoster(p); } catch (e) { console.error('[MP] buildRoster 失败', e); }
       }
       return r;
-    };
+    });
 
     /* ---- 2.2 damage：本地裁决 or 上报服务器 ---- */
-    game.damage = function (target, attacker, dmg, part, weapon, dir, wallbang, melee) {
+    game.hooks.replace('damage', function (target, attacker, dmg, part, weapon, dir, wallbang, melee) {
       if (!MP.active || !attacker) return origDamage(target, attacker, dmg, part, weapon, dir, wallbang, melee);
 
       // 谁是这次伤害的"责任人"？—— 射手所在的客户端
@@ -204,45 +204,45 @@
 
       // 打到房主本地模拟的 bot：本地裁决（房主是 bot 的权威）
       return origDamage(target, attacker, dmg, part, weapon, dir, wallbang, melee);
-    };
+    });
 
     /* ---- 2.3 fireWeapon：记录开火序号，远端据此播放枪声 ---- */
-    game.fireWeapon = function (t, e, i) {
+    game.hooks.replace('fireWeapon', function (t, e, i) {
       const r = origFireWeapon(t, e, i);
       if (MP.active && t) {
         if (t.isPlayer) MP.fireSeq++;
         else if (t.netId && !t.isGhost) t.__fireSeq = (t.__fireSeq || 0) + 1;
       }
       return r;
-    };
+    });
 
     // 原版已算出视觉弹道方向，但目标、部位和伤害都不再由页面指定。
-    game.traceBullet = function (shooter, origin, direction, weapon) {
+    game.hooks.replace('traceBullet', function (shooter, origin, direction, weapon) {
       if (MP.active && shooter === game.player && MP.room) {
         sendLoop(); // WebSocket 保序，先把本次开枪位置和视角送到服务端。
         MP.room.sendShot([direction.x, direction.y, direction.z], weapon.id, ++MP.shotSeq);
       }
       return origTraceBullet(shooter, origin, direction, weapon);
-    };
+    });
 
-    game.melee = function (actor, heavy) {
+    game.hooks.replace('melee', function (actor, heavy) {
       if (MP.active && actor === game.player && MP.room) {
         sendLoop();
         MP.room.sendMelee(heavy);
       }
       return origMelee(actor, heavy);
-    };
+    });
 
-    game.throwGrenade = function (actor) {
+    game.hooks.replace('throwGrenade', function (actor) {
       if (MP.active && actor === game.player && MP.room) {
         sendLoop();
         MP.room.sendGrenade();
       }
       return origThrowGrenade(actor);
-    };
+    });
 
     /* ---- 2.4 spawnActor：我复活了，告诉服务器 ---- */
-    game.spawnActor = function (actor, fast) {
+    game.hooks.replace('spawnActor', function (actor, fast) {
       const r = origSpawnActor(actor, fast);
       if (MP.active && actor && actor.netId) {
         const p = [actor.pos.x, actor.pos.y, actor.pos.z];
@@ -251,10 +251,10 @@
         else if (!actor.isGhost) MP.room.net.send({ t: 'botrespawn', i: actor.netId, p, y: actor.yaw, w });
       }
       return r;
-    };
+    });
 
     /* ---- 2.5 quitToMenu：退出对局 = 离开房间 ---- */
-    game.quitToMenu = function () {
+    game.hooks.replace('quitToMenu', function () {
       if (MP.active) {
         MP.active = false;
         if (MP.sendTimer) { clearInterval(MP.sendTimer); MP.sendTimer = 0; }
@@ -263,10 +263,10 @@
       origQuitToMenu();
       try { CFRoomUI.injectMenuButton('联 机 对 战', () => MP.ui.open()); } catch (_) {}
       MP.ui.open();
-    };
+    });
 
     /* ---- 2.6 kill：房主本地的 bot 死了要广播给所有人 ---- */
-    game.kill = function (t, e, i, n, s, a) {
+    game.hooks.replace('kill', function (t, e, i, n, s, a) {
       const r = origKill(t, e, i, n, s, a);
       if (MP.active && MP.room.isHost && t && t.netId && !t.isPlayer && !t.isGhost) {
         MP.room.net.send({
@@ -278,7 +278,7 @@
         });
       }
       return r;
-    };
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -286,6 +286,14 @@
   /* ------------------------------------------------------------------ */
   function enterMatch(payload) {
     const g = MP.game;
+    const mapId = payload.map || MP.room.room?.map || 'transport-ship';
+    const mapVersion = payload.mapVersion ?? MP.room.room?.mapVersion ?? g.mapRules.version;
+    if (mapId !== g.mapRules.id || mapVersion !== g.mapRules.version) {
+      MP.room.leave();
+      MP.ui.open();
+      window.alert(`无法进入对局：本地缺少地图 ${mapId} 的版本 ${mapVersion}。请更新页面后重试。`);
+      return;
+    }
     MP.active = true;
     MP.selfId = payload.selfId;
     MP.myTeam = payload.team;

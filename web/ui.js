@@ -12,6 +12,8 @@
     BL: { name: '潜伏者', color: '#ff9b70', desc: 'Black List' },
     GR: { name: '保卫者', color: '#8cc8ff', desc: 'Global Risk' },
   };
+  const DEFAULT_MAP = { id: 'transport-ship', version: 1, displayName: '运输船',
+    poster: '/web/assets/maps/cf-transport-ship.png' };
 
   const CSS = `
   #cfMp{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;
@@ -84,9 +86,34 @@
   @media(max-width:560px){.cfHead{gap:7px;padding:11px}.cfHead h1{font-size:13px}.cfHead .cfNetStatus{font-size:10px}
     .cfMainNav{padding:8px 10px;overflow-x:auto}.cfMainNav button.cf{padding:7px 10px}}
   .cfRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-  input.cf,select.cf{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);color:#eee;
+  input.cf{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);color:#eee;
     border-radius:8px;padding:9px 11px;font-size:13px;outline:none}
-  input.cf:focus,select.cf:focus{border-color:#f5b321}
+  input.cf:focus{border-color:#f5b321}
+  .cfDropdown{position:relative;min-width:112px;font-size:13px}
+  .cfDropTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    width:100%;min-height:38px;padding:8px 11px;color:#eee;text-align:left;font:inherit;cursor:pointer;
+    border:1px solid rgba(255,255,255,.17);border-radius:8px;
+    background:linear-gradient(180deg,rgba(49,43,34,.9),rgba(22,20,18,.94));
+    box-shadow:inset 0 1px rgba(255,255,255,.04),0 2px 8px rgba(0,0,0,.12);
+    transition:border-color .2s ease,background .2s ease,box-shadow .2s ease,transform .2s ease}
+  .cfDropTrigger:hover{border-color:rgba(245,179,33,.55);background:linear-gradient(180deg,rgba(61,49,30,.95),rgba(28,24,19,.97))}
+  .cfDropTrigger:focus-visible,.cfDropdown.open .cfDropTrigger{outline:none;border-color:#f5b321;
+    box-shadow:0 0 0 3px rgba(245,179,33,.15),inset 0 1px rgba(255,255,255,.06)}
+  .cfDropTrigger:active{transform:translateY(1px)}
+  .cfDropChevron{width:7px;height:7px;flex:none;border-right:1.5px solid #e5ba69;border-bottom:1.5px solid #e5ba69;
+    transform:rotate(45deg) translateY(-2px);transition:transform .22s ease}
+  .cfDropdown.open .cfDropChevron{transform:rotate(225deg) translateY(-2px)}
+  .cfDropMenu{position:absolute;z-index:20;top:calc(100% + 5px);left:0;right:0;min-width:max-content;
+    padding:5px;border:1px solid rgba(245,179,33,.35);border-radius:9px;
+    background:#211c17;box-shadow:0 14px 32px rgba(0,0,0,.5),inset 0 1px rgba(255,255,255,.05);
+    opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-6px) scale(.98);transform-origin:top;
+    transition:opacity .18s ease,transform .18s ease,visibility .18s ease}
+  .cfDropdown.open .cfDropMenu{opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0) scale(1)}
+  .cfDropOption{display:block;width:100%;padding:8px 10px;border:0;border-radius:6px;background:transparent;
+    color:#ddd;text-align:left;white-space:nowrap;font:inherit;cursor:pointer;transition:background .16s ease,color .16s ease}
+  .cfDropOption:hover,.cfDropOption:focus-visible{outline:none;background:rgba(245,179,33,.14);color:#fff}
+  .cfDropOption[aria-selected="true"]{background:rgba(245,179,33,.18);color:#f5c76d}
+  @media(prefers-reduced-motion:reduce){.cfDropTrigger,.cfDropChevron,.cfDropMenu,.cfDropOption{transition:none}}
   button.cf{background:linear-gradient(180deg,#f7c34a,#e09a18);border:0;color:#241a05;font-weight:700;
     border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer}
   button.cf:hover{filter:brightness(1.08)}
@@ -228,6 +255,11 @@
      */
     mount(room, opts) {
       opts = opts || {};
+      const mapInfo = (id) => room.maps.find((map) => map.id === id)
+        || (id === DEFAULT_MAP.id ? DEFAULT_MAP : { id, displayName: id || '未知地图', poster: DEFAULT_MAP.poster });
+      let selectedMapId = DEFAULT_MAP.id;
+      let selectedSize = '5', selectedGoal = '50', selectedBots = '0';
+      let dropdownSeq = 0;
 
       if (!document.getElementById('cfMpStyle')) {
         const style = document.createElement('style');
@@ -242,6 +274,86 @@
         root.id = 'cfMp';
         document.body.appendChild(root);
       }
+
+      function closeDropdown(dropdown, returnFocus = false) {
+        if (!dropdown) return;
+        dropdown.classList.remove('open');
+        const trigger = dropdown.querySelector('.cfDropTrigger');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (returnFocus) trigger.focus();
+      }
+
+      function dropdown(label, entries, initialValue) {
+        const wrap = el('div', 'cfDropdown');
+        const trigger = el('button', 'cfDropTrigger');
+        trigger.type = 'button';
+        trigger.setAttribute('aria-label', label);
+        trigger.setAttribute('aria-haspopup', 'listbox');
+        trigger.setAttribute('aria-expanded', 'false');
+        const caption = el('span', 'cfDropCaption');
+        trigger.append(caption, el('span', 'cfDropChevron'));
+        const menu = el('div', 'cfDropMenu');
+        menu.id = 'cfDropMenu' + ++dropdownSeq;
+        trigger.setAttribute('aria-controls', menu.id);
+        menu.setAttribute('role', 'listbox');
+        menu.setAttribute('aria-label', label);
+        const options = entries.map(([value, text]) => {
+          const option = el('button', 'cfDropOption');
+          option.type = 'button';
+          option.textContent = text;
+          option.dataset.value = value;
+          option.setAttribute('role', 'option');
+          option.tabIndex = -1;
+          menu.appendChild(option);
+          return option;
+        });
+        let value = entries.some(([item]) => item === initialValue) ? initialValue : entries[0][0];
+        function select(nextValue, notify = true) {
+          value = nextValue;
+          const selected = options.find((option) => option.dataset.value === value);
+          caption.textContent = selected.textContent;
+          for (const option of options) option.setAttribute('aria-selected', String(option === selected));
+          if (notify) wrap.onchange?.();
+        }
+        function open() {
+          root.querySelectorAll('.cfDropdown.open').forEach((other) => closeDropdown(other));
+          wrap.classList.add('open');
+          trigger.setAttribute('aria-expanded', 'true');
+          options.find((option) => option.dataset.value === value).focus();
+        }
+        trigger.onclick = () => wrap.classList.contains('open') ? closeDropdown(wrap) : open();
+        options.forEach((option) => {
+          option.onclick = () => { select(option.dataset.value); closeDropdown(wrap, true); };
+        });
+        wrap.onkeydown = (event) => {
+          if (event.key === 'Escape' && wrap.classList.contains('open')) {
+            event.preventDefault(); closeDropdown(wrap, true); return;
+          }
+          const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+          if (!direction && event.key !== 'Home' && event.key !== 'End') return;
+          event.preventDefault();
+          if (!wrap.classList.contains('open')) { open(); return; }
+          const current = options.indexOf(document.activeElement);
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+            : (current + direction + options.length) % options.length;
+          options[next].focus();
+        };
+        wrap.addEventListener('focusout', (event) => {
+          if (!wrap.contains(event.relatedTarget)) closeDropdown(wrap);
+        });
+        Object.defineProperty(wrap, 'value', { get: () => value, set: (next) => {
+          if (options.some((option) => option.dataset.value === next)) select(next, false);
+        } });
+        wrap.append(trigger, menu);
+        select(value, false);
+        return wrap;
+      }
+
+      document.addEventListener('pointerdown', (event) => {
+        root.querySelectorAll('.cfDropdown.open').forEach((open) => {
+          if (!open.contains(event.target)) closeDropdown(open);
+        });
+      });
 
       const bgmTracks = {
         lobby: '/web/assets/audio/cf-classic-lobby-unbound.mp3',
@@ -826,23 +938,22 @@
         body.appendChild(el('div', 'cfSectionTitle', '创建房间'));
         const row = el('div', 'cfRow');
         const nm = el('input', 'cf'); nm.placeholder = '房间名'; nm.value = (room.name || '玩家') + '的房间';
-        const size = el('select', 'cf');
-        [['4', '4v4'], ['5', '5v5'], ['6', '6v6'], ['8', '8v8']].forEach(([v, t]) => {
-          const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === '5') o.selected = true; size.appendChild(o);
-        });
-        const goal = el('select', 'cf');
-        [['30', '目标 30'], ['50', '目标 50'], ['100', '目标 100']].forEach(([v, t]) => {
-          const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === '50') o.selected = true; goal.appendChild(o);
-        });
-        const bots = el('select', 'cf');
-        [['0', '不补 bot'], ['2', '补 2 bot'], ['4', '补 4 bot'], ['6', '补 6 bot']].forEach(([v, t]) => {
-          const o = document.createElement('option'); o.value = v; o.textContent = t; bots.appendChild(o);
-        });
+        const mapSelect = dropdown('选择地图', (room.maps.length ? room.maps : [DEFAULT_MAP])
+          .map((map) => [map.id, '地图 · ' + map.displayName]), selectedMapId);
+        selectedMapId = mapSelect.value;
+        mapSelect.onchange = () => { selectedMapId = mapSelect.value; };
+        const size = dropdown('选择房间人数', [['4', '4v4'], ['5', '5v5'], ['6', '6v6'], ['8', '8v8']], selectedSize);
+        size.onchange = () => { selectedSize = size.value; };
+        const goal = dropdown('选择目标分数', [['30', '目标 30'], ['50', '目标 50'], ['100', '目标 100']], selectedGoal);
+        goal.onchange = () => { selectedGoal = goal.value; };
+        const bots = dropdown('选择补位机器人', [['0', '不补 bot'], ['2', '补 2 bot'], ['4', '补 4 bot'], ['6', '补 6 bot']], selectedBots);
+        bots.onchange = () => { selectedBots = bots.value; };
         const mk = el('button', 'cf', '创建房间');
         const rf = el('button', 'cf ghost', '刷新');
-        row.append(nm, size, goal, bots, mk, rf);
+        row.append(nm, mapSelect, size, goal, bots, mk, rf);
         body.appendChild(row);
-        mk.onclick = () => room.create({ name: nm.value.trim() || '运输船房间', size: +size.value, goal: +goal.value, bots: +bots.value, team: 'BL' });
+        mk.onclick = () => room.create({ name: nm.value.trim() || `${mapInfo(mapSelect.value).displayName}房间`, mapId: mapSelect.value,
+          size: +size.value, goal: +goal.value, bots: +bots.value, team: 'BL' });
         rf.onclick = () => room.refresh();
 
         body.appendChild(el('div', 'cfSectionTitle', '可加入的房间'));
@@ -860,7 +971,7 @@
             name.appendChild(hostLine);
           }
           it.appendChild(name);
-          it.appendChild(el('div', 'meta', `${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · bot ' + r.bots : ''}`));
+          it.appendChild(el('div', 'meta', `${esc(mapInfo(r.map).displayName)} · ${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · bot ' + r.bots : ''}`));
           it.appendChild(el('div', 'meta', r.state === 'playing' ? (r.players.length < r.size * 2 ? '进行中 · 可中途加入' : '进行中 · 已满') : '等待中'));
           it.onclick = () => room.join(r.id);
           list.appendChild(it);
@@ -899,8 +1010,9 @@
         const intro = el('div', 'cfRoomIntro');
         intro.appendChild(el('div', 'cfTip',
           `<b style="font-size:14px">${esc(r.name)}</b><br>${r.size}v${r.size} · 目标 ${r.goal} 杀 · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · 补位 bot ' + r.bots : ''}`));
+        const selectedMap = mapInfo(r.map);
         intro.appendChild(el('aside', 'cfMapPoster',
-          '<img src="/web/assets/maps/cf-transport-ship.png?v=2" alt="穿越火线运输船地图海报"><span>当前地图 · 运输船</span>'));
+          `<img src="${esc(selectedMap.poster)}" alt="${esc(selectedMap.displayName)}地图海报"><span>当前地图 · ${esc(selectedMap.displayName)}</span>`));
         body.appendChild(intro);
 
         const teams = el('div', 'cfTeams');
