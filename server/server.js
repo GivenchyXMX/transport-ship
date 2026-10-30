@@ -44,10 +44,10 @@ const WEAPONS    = new Set(['ak47', 'm4a1', 'awm', 'mp5', 'deagle', 'knife', 'he
 const ROOT_DIR   = path.resolve(__dirname, '..');
 const PUBLIC_FILES = new Set([
   '/index.html', '/transport-ship-mp.html', '/web/testbed.html',
-  '/web/net.js', '/web/room.js', '/web/ui.js', '/web/mp.js',
+  '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
 ]);
 const auth = makeAuth();
-const leaderboard = makeLeaderboard();
+const leaderboard = makeLeaderboard((accountId) => rank.getProfile(accountId).name);
 const rank = makeRank();
 const COOKIE_PREFIX = 'ship_session_';
 const COOKIE_SECURE = process.env.PUBLIC_ORIGIN?.startsWith('https://') || false;
@@ -782,7 +782,8 @@ const server = http.createServer((req, res) => {
   }
 
   // 远程部署时绝不能把 server/、依赖、日志或配置文件作为静态文件公开。
-  if (!PUBLIC_FILES.has(rel)) { res.writeHead(404).end('404'); return; }
+  const rankIconFile = /^\/web\/assets\/ranks\/source\/[0-9]{3}_[\p{Script=Han}0-9]+\.jpg$/u.test(rel);
+  if (!PUBLIC_FILES.has(rel) && !rankIconFile) { res.writeHead(404).end('404'); return; }
   const filePath = path.join(ROOT_DIR, rel.slice(1));
 
   fs.readFile(filePath, (err, buf) => {

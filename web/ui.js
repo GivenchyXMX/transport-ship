@@ -62,6 +62,7 @@
   .cfItem:last-child{border-bottom:0}
   .cfItem:hover{background:rgba(255,255,255,.05)}
   .cfItem .nm{flex:1;font-size:14px}
+  .cfItem .nm small{display:flex;align-items:center;gap:5px;margin-top:4px;color:#aaa;font-size:11px}
   .cfItem .meta{font-size:12px;color:#9a9a9a}
   .cfEmpty{padding:26px;text-align:center;color:#888;font-size:13px}
   .cfTeams{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -69,12 +70,15 @@
   .cfTeam h3{margin:0;padding:10px 14px;font-size:14px;letter-spacing:1px;background:rgba(255,255,255,.05)}
   .cfSlot{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
   .cfSlot.mine{background:rgba(245,179,33,.12)}
-  .cfSlot .st{margin-left:auto;font-size:11px;color:#999}
+  .cfSlot .st{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px;margin-left:auto;font-size:11px;color:#999}
   .cfSlotName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   button.cf.cfKick{flex:none;padding:4px 8px;font-size:11px;color:#ff9b9b;border-color:rgba(255,120,120,.4)}
   .cfSlot.empty{color:#8c8c8c;cursor:pointer}
   .cfSlot.empty:hover{background:rgba(255,255,255,.06);color:#ddd}
   .cfTag{font-size:11px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,.12)}
+  .cfRankMark{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;color:#f0d49b}
+  .cfRankIcon{width:24px;height:24px;object-fit:contain;flex:none;border-radius:3px}
+  .cfRankTable .cfRankMark{font-size:12px}
   .cfTag.rdy{background:rgba(61,220,132,.2);color:#7ff0b0}
   .cfFoot{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid rgba(255,255,255,.08)}
   .cfTip{font-size:12px;color:#9a9a9a;line-height:1.7}
@@ -85,7 +89,8 @@
   .cfRankTabs button.active{background:#f5b321;color:#231909;border-color:#f5b321;font-weight:700}
   .cfRankTable{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
   .cfRankTable th,.cfRankTable td{padding:9px 10px;text-align:right;border-bottom:1px solid rgba(255,255,255,.08)}
-  .cfRankTable th:nth-child(2),.cfRankTable td:nth-child(2){text-align:left}
+  .cfRankTable th:nth-child(2),.cfRankTable td:nth-child(2),
+  .cfRankTable th:nth-child(3),.cfRankTable td:nth-child(3){text-align:left}
   .cfRankTable th{color:#aaa;font-weight:500}
   .cfRankTable tr.mine{background:rgba(245,179,33,.12)}
   .cfRankTable .focus{color:#f5b321;font-weight:700}
@@ -99,7 +104,7 @@
   .cfProfileStat{min-width:0;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.03)}
   .cfProfileLabel{font-size:12px;color:#999;margin-bottom:5px}
   .cfProfileValue{font-size:16px;font-weight:600;overflow-wrap:anywhere}
-  @media(max-width:560px){.cfProfileGrid{grid-template-columns:1fr}}
+  @media(max-width:560px){.cfProfileGrid,.cfTeams{grid-template-columns:1fr}}
   `;
 
   function esc(s) {
@@ -113,6 +118,14 @@
     if (cls) n.className = cls;
     if (html != null) n.innerHTML = html;
     return n;
+  }
+
+  function rankMark(name) {
+    const mark = el('span', 'cfRankMark');
+    const icon = global.CFRankIcons?.icon(name);
+    if (icon) mark.appendChild(icon);
+    mark.appendChild(document.createTextNode(name || '—'));
+    return mark;
   }
 
   function renderOnlineList(panel, room, follow) {
@@ -313,7 +326,9 @@
         body.appendChild(details);
         const p = rankProfile.profile;
         const card = el('div', 'cfXpCard');
-        card.appendChild(el('div', 'cfXpTitle', `军衔 · ${p.level} 级 ${esc(p.name)}`));
+        const rankTitle = el('div', 'cfXpTitle');
+        rankTitle.append(document.createTextNode(`军衔 · ${p.level} 级 `), rankMark(p.name));
+        card.appendChild(rankTitle);
         card.appendChild(el('div', 'cfTip', `累计 ${p.xpTotal} XP · ${p.nextLevelNeed === null ? '已满级' : `升级还需 ${p.nextLevelNeed} XP`}`));
         const track = el('div', 'cfXpTrack');
         const fill = document.createElement('span');
@@ -525,7 +540,14 @@
         if (!rs.length) list.appendChild(el('div', 'cfEmpty', '暂无房间，点「创建房间」开一个'));
         rs.forEach((r) => {
           const it = el('div', 'cfItem');
-          it.appendChild(el('div', 'nm', esc(r.name)));
+          const name = el('div', 'nm', esc(r.name));
+          const host = r.players.find((p) => p.netId === r.host);
+          if (host) {
+            const hostLine = el('small');
+            hostLine.append(document.createTextNode(`房主 ${host.name} · `), rankMark(host.rank));
+            name.appendChild(hostLine);
+          }
+          it.appendChild(name);
           it.appendChild(el('div', 'meta', `${r.size}v${r.size} · 目标 ${r.goal} · ${r.players.length}/${r.size * 2} 人${r.bots ? ' · bot ' + r.bots : ''}`));
           it.appendChild(el('div', 'meta', r.state === 'playing' ? (r.players.length < r.size * 2 ? '进行中 · 可中途加入' : '进行中 · 已满') : '等待中'));
           it.onclick = () => room.join(r.id);
@@ -562,7 +584,7 @@
             if (p) {
               s.appendChild(el('span', 'cfSlotName', esc(p.name)));
               const tags = el('span', 'st');
-              if (p.rank) tags.appendChild(el('span', 'cfTag', esc(p.rank)));
+              if (p.rank) tags.appendChild(rankMark(p.rank));
               if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
               if (p.ready) tags.appendChild(el('span', 'cfTag rdy', '已准备'));
               if (p.pendingBattle) tags.appendChild(el('span', 'cfTag', '待加入'));
@@ -593,6 +615,7 @@
             const name = el('span', 'cfSlotName');
             name.textContent = p.name;
             row.appendChild(name);
+            if (p.rank) row.appendChild(rankMark(p.rank));
             if (room.isHost) row.appendChild(kickButton(p));
             body.appendChild(row);
           }
@@ -667,13 +690,18 @@
         if (!rows.length) { body.appendChild(el('div', 'cfEmpty', '当前榜单还没有战绩')); return; }
         const wrap = el('div', 'cfRankWrap');
         const table = el('table', 'cfRankTable');
-        table.innerHTML = '<thead><tr><th>名次</th><th>玩家</th><th>击杀</th><th>爆头</th><th>死亡</th><th>K/D</th></tr></thead>';
+        table.innerHTML = '<thead><tr><th>名次</th><th>玩家</th><th>军衔</th><th>击杀</th><th>爆头</th><th>死亡</th><th>K/D</th></tr></thead>';
         const tbody = document.createElement('tbody');
-        const focusIndex = { kills: 2, headshots: 3, deaths: 4, kd: 5 }[rankMetric];
+        const focusIndex = { kills: 3, headshots: 4, deaths: 5, kd: 6 }[rankMetric];
         for (const player of rows) {
           const tr = el('tr', player.accountId === authUser?.id ? 'mine' : '');
-          const values = [player.rank, esc(player.name), player.kills, player.headshots, player.deaths, Number(player.kd).toFixed(2)];
-          values.forEach((value, index) => tr.appendChild(el('td', index === focusIndex ? 'focus' : '', String(value))));
+          const values = [player.rank, player.name, null, player.kills, player.headshots, player.deaths, Number(player.kd).toFixed(2)];
+          values.forEach((value, index) => {
+            const cell = el('td', index === focusIndex ? 'focus' : '');
+            if (index === 2) cell.appendChild(rankMark(player.militaryRank));
+            else cell.textContent = String(value);
+            tr.appendChild(cell);
+          });
           tbody.appendChild(tr);
         }
         table.appendChild(tbody);
@@ -698,7 +726,10 @@
         head.appendChild(el('h1', null, opts.title || '运输船 · 联机对战'));
         head.appendChild(el('span', 'sp'));
         if (authUser) {
-          head.appendChild(el('span', 'cfTip', esc(authUser.name) + (rankProfile ? ` · ${esc(rankProfile.profile.name)}` : '')));
+          const profileHead = el('span', 'cfTip');
+          profileHead.appendChild(document.createTextNode(authUser.name));
+          if (rankProfile) profileHead.append(document.createTextNode(' · '), rankMark(rankProfile.profile.name));
+          head.appendChild(profileHead);
           if (room.registered) {
             const rankButton = el('button', 'cf ghost', rankOpen ? '关闭个人信息' : '个人信息');
             rankButton.onclick = () => { rankOpen = !rankOpen; leaderboardOpen = false; render(); if (rankOpen) void loadRank(true); };

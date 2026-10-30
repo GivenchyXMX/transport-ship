@@ -68,6 +68,11 @@
         border-radius:3px;color:rgba(243,239,230,.74);font-size:11px;letter-spacing:.3px;
         text-shadow:0 1px 2px #000;white-space:nowrap;pointer-events:none}
       #hud #feed{top:44px}
+      #board{overflow-x:auto}
+      #board .cols{min-width:720px}
+      #board .cfBoardRank{display:inline-flex;align-items:center;gap:3px;margin-right:6px;
+        color:#f0d49b;font-size:11px;vertical-align:middle;white-space:nowrap}
+      #board .cfBoardRank img{width:20px;height:20px;object-fit:contain;border-radius:2px}
       @media(max-width:600px){#cfShortcutHint{top:8px;right:8px;font-size:10px;padding:4px 6px}}
     `;
     document.head.appendChild(style);
@@ -141,6 +146,27 @@
     origThrowGrenade = game.throwGrenade.bind(game);
     origSpawnActor = game.spawnActor.bind(game);
     origQuitToMenu = game.quitToMenu.bind(game);
+
+    const origScoreboard = game.hud.scoreboard.bind(game.hud);
+    game.hud.scoreboard = function (visible, actors, selfId, score) {
+      origScoreboard(visible, actors, selfId, score);
+      if (!visible || !MP.active) return;
+      for (const team of ['BL', 'GR']) {
+        const ordered = actors.filter((actor) => actor.team === team)
+          .sort((a, b) => b.stats.k - a.stats.k || a.stats.d - b.stats.d);
+        const rows = game.hud.el.boardBody.querySelectorAll(`table.t${team} tr:not(:first-child)`);
+        ordered.forEach((actor, index) => {
+          const cell = rows[index]?.querySelector('td:first-child');
+          if (!cell || !actor.rankName) return;
+          const mark = document.createElement('span');
+          mark.className = 'cfBoardRank';
+          const icon = window.CFRankIcons?.icon(actor.rankName);
+          if (icon) mark.appendChild(icon);
+          mark.appendChild(document.createTextNode(actor.rankName));
+          cell.insertBefore(mark, cell.firstChild);
+        });
+      }
+    };
 
     /* ---- 2.1 startMatch：原版建好 player + bot 后，换成真人名单 ---- */
     game.startMatch = function () {
@@ -307,6 +333,7 @@
     const g = MP.game;
     const player = g.player;
     player.netId = payload.selfId;
+    player.rankName = MP.room.me?.rank || null;
 
     /* 3.1 反查原版内部类（第一局开始后才拿得到 player 实例） */
     const ActorBase = Object.getPrototypeOf(Object.getPrototypeOf(player)).constructor;
@@ -405,6 +432,7 @@
       constructor(game, info, id) {
         super(game, { id, name: info.name, team: info.team });
         this.netId = info.netId;
+        this.rankName = info.rank || null;
         this.isGhost = true;          // damage() 靠这个标记分流
         this.isBot = !!info.isBot;
         this.primary = info.primary || 'ak47';

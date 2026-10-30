@@ -21,10 +21,11 @@ function periodStart(period, time) {
   return midnight;
 }
 
-function boardsFrom(rows) {
+function boardsFrom(rows, getMilitaryRank) {
   const data = rows.filter((row) => row.kills || row.deaths).map((row) => ({
     accountId: row.accountId,
     name: row.name,
+    militaryRank: getMilitaryRank(row.accountId),
     kills: Number(row.kills) || 0,
     headshots: Number(row.headshots) || 0,
     deaths: Number(row.deaths) || 0,
@@ -39,7 +40,7 @@ function boardsFrom(rows) {
   };
 }
 
-function makeLeaderboard() {
+function makeLeaderboard(getMilitaryRank) {
   const dbPath = process.env.AUTH_DB_PATH || path.resolve(__dirname, '../.runtime/accounts.sqlite');
   fs.mkdirSync(path.dirname(dbPath), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
@@ -75,7 +76,7 @@ function makeLeaderboard() {
     getHistorical(period, time = Date.now()) {
       if (!PERIODS.has(period) || period === 'live') throw new Error('无效的排行榜周期');
       const start = periodStart(period, time);
-      return { period, windowStart: start || null, updatedAt: time, boards: boardsFrom(historical.all(start, start)) };
+      return { period, windowStart: start || null, updatedAt: time, boards: boardsFrom(historical.all(start, start), getMilitaryRank) };
     },
     getLifetimeStats(accountId) {
       const row = lifetime.get(accountId, accountId);
@@ -92,7 +93,7 @@ function makeLeaderboard() {
           if (stats) rows.push({ accountId: player.accountId, name: player.name, ...stats });
         }
       }
-      return { period: 'live', windowStart: null, updatedAt: time, boards: boardsFrom(rows) };
+      return { period: 'live', windowStart: null, updatedAt: time, boards: boardsFrom(rows, getMilitaryRank) };
     },
     close() { db.close(); },
   };
