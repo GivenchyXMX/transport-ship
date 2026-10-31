@@ -23,6 +23,12 @@ function makeSocial() {
       account_low TEXT NOT NULL, account_high TEXT NOT NULL, created_at INTEGER NOT NULL,
       PRIMARY KEY(account_low,account_high)
     );
+    CREATE TABLE IF NOT EXISTS private_messages (
+      id TEXT PRIMARY KEY, account_low TEXT NOT NULL, account_high TEXT NOT NULL,
+      sender_id TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS private_messages_pair_time
+      ON private_messages(account_low,account_high,created_at DESC,id DESC);
     CREATE TABLE IF NOT EXISTS offline_invitations (
       id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, sender_id TEXT NOT NULL,
       target_id TEXT NOT NULL, kind TEXT NOT NULL, room_id TEXT, room_instance_id TEXT,
@@ -32,6 +38,8 @@ function makeSocial() {
   const columns = db.prepare('PRAGMA table_info(accounts)').all().map((column) => column.name);
   if (!columns.includes('last_online_at')) db.exec('ALTER TABLE accounts ADD COLUMN last_online_at INTEGER');
   if (!columns.includes('last_seen_at')) db.exec('ALTER TABLE accounts ADD COLUMN last_seen_at INTEGER');
+  const messageColumns = db.prepare('PRAGMA table_info(private_messages)').all().map((column) => column.name);
+  if (!messageColumns.includes('read_at')) db.exec('ALTER TABLE private_messages ADD COLUMN read_at INTEGER');
 
   const mailReady = !!(process.env.SMTP_HOST && process.env.SMTP_FROM && process.env.SMTP_USER && process.env.SMTP_PASS);
   const mailer = mailReady ? nodemailer.createTransport({
@@ -78,7 +86,11 @@ function makeSocial() {
       COALESCE(rp.xp_total,0) AS xp_total FROM friendships f
       JOIN accounts a ON a.id=CASE WHEN f.account_low=? THEN f.account_high ELSE f.account_low END
       LEFT JOIN rank_profiles rp ON rp.account_id=a.id
-      WHERE f.account_low=? OR f.account_high=? ORDER BY a.name_key`).all(me, me, me).map(publicAccount);
+      WHERE f.account_low=? OR f.account_high=? ORDER BY a.name_key`).all(me, me, me).map((row) => {
+        const [low, high] = pair(me, row.id);
+        return { ...publicAccount(row), unreadCount: db.prepare(`SELECT COUNT(*) AS n FROM private_messages
+          WHERE account_low=? AND account_high=? AND sender_id=? AND read_at IS NULL`).get(low, high, row.id).n };
+      });
   }
   function requests(me) {
     return db.prepare(`SELECT r.id,r.sender_id,r.recipient_id,r.created_at,
@@ -124,10 +136,45 @@ function makeSocial() {
   }
   function removeFriend(me, target) {
     const [low, high] = pair(me, target);
-    const result = db.prepare('DELETE FROM friendships WHERE account_low=? AND account_high=?').run(low, high);
-    if (!result.changes) fail(404, '好友关系不存在');
-    db.prepare(`DELETE FROM offline_invitations WHERE consumed_at IS NULL
-      AND ((sender_id=? AND target_id=?) OR (sender_id=? AND target_id=?))`).run(me, target, target, me);
+    db.exec('BEGIN');
+    try {
+      const result = db.prepare('DELETE FROM friendships WHERE account_low=? AND account_high=?').run(low, high);
+      if (!result.changes) fail(404, '好友关系不存在');
+      db.prepare('DELETE FROM private_messages WHERE account_low=? AND account_high=?').run(low, high);
+      db.prepare(`DELETE FROM offline_invitations WHERE consumed_at IS NULL
+        AND ((sender_id=? AND target_id=?) OR (sender_id=? AND target_id=?))`).run(me, target, target, me);
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
+  function privateHistory(me, target, before) {
+    if (!isFriend(me, target)) fail(403, '只能查看好友私聊');
+    const [low, high] = pair(me, target);
+    const cutoff = Number.isSafeInteger(Number(before)) && Number(before) > 0 ? Number(before) : Number.MAX_SAFE_INTEGER;
+    const rows = db.prepare(`SELECT rowid AS seq,id,sender_id AS senderId,body,created_at AS createdAt,read_at AS readAt
+      FROM private_messages WHERE account_low=? AND account_high=? AND rowid<?
+      ORDER BY rowid DESC LIMIT 51`).all(low, high, cutoff);
+    return { messages: rows.slice(0, 50).reverse(), nextBefore: rows.length > 50 ? rows[49].seq : null };
+  }
+  function sendPrivate(me, target, body) {
+    if (!isFriend(me, target)) fail(403, '只能给好友发送私聊');
+    if (typeof body !== 'string') fail(400, '消息内容无效');
+    const text = body.trim();
+    if (!text || text.length > 500 || /[\u0000-\u001f\u007f]/.test(text)) fail(400, '消息须为 1–500 字，且不能包含控制字符');
+    const [low, high] = pair(me, target);
+    const message = { id: crypto.randomUUID(), senderId: me, body: text, createdAt: Date.now(), readAt: null };
+    db.prepare(`INSERT INTO private_messages (id,account_low,account_high,sender_id,body,created_at)
+      VALUES (?,?,?,?,?,?)`).run(message.id, low, high, me, text, message.createdAt);
+    return message;
+  }
+  function markPrivateRead(me, target) {
+    if (!isFriend(me, target)) fail(403, '只能查看好友私聊');
+    const [low, high] = pair(me, target);
+    const ids = db.prepare(`SELECT id FROM private_messages WHERE account_low=? AND account_high=?
+      AND sender_id=? AND read_at IS NULL`).all(low, high, target).map((row) => row.id);
+    const readAt = Date.now();
+    if (ids.length) db.prepare(`UPDATE private_messages SET read_at=? WHERE account_low=? AND account_high=?
+      AND sender_id=? AND read_at IS NULL`).run(readAt, low, high, target);
+    return { ids, readAt };
   }
   function online(me, t = Date.now()) {
     db.prepare('UPDATE accounts SET last_online_at=?,last_seen_at=? WHERE id=?').run(t, t, me);
@@ -189,7 +236,7 @@ function makeSocial() {
     if (!row || row.consumed_at || row.expires_at <= Date.now() || row.delivery_status !== 'sent') fail(400, '邀请链接已过期或已使用');
     return row.target_id;
   }
-  return { players, friends, requests, sendRequest, respond, removeFriend, online, seen,
+  return { players, friends, requests, sendRequest, respond, removeFriend, privateHistory, sendPrivate, markPrivateRead, online, seen,
     isFriend, account, sendOffline, inviteTarget, redeem, close: () => db.close() };
 }
 

@@ -110,6 +110,7 @@
     addShortcutHint();
     MP.net = new CFNet(wsUrls());
     MP.room = new CFRoom(MP.net);
+    setupBattleChat(game);
 
     MP.ui = CFRoomUI.mount(MP.room, {
       title: '运输船 · 联机对战',
@@ -131,6 +132,167 @@
     hookGame(game);
     bindNetwork();
     console.log('[MP] 联机补丁就绪，等待玩家输入昵称');
+  }
+
+  function setupBattleChat(game) {
+    const style = document.createElement('style');
+    style.textContent = `
+      #cfBattleChat{position:fixed;left:18px;bottom:88px;z-index:10000;width:min(400px,calc(100vw - 36px));
+        color:#fff;font:13px/1.45 system-ui,sans-serif;text-shadow:0 1px 3px #000;pointer-events:none}
+      #cfBattleChatLog{max-height:125px;overflow-y:auto;padding:4px 6px;background:rgba(0,0,0,.32);border-radius:5px}
+      .cfBattleChatLine{overflow-wrap:anywhere;padding:2px 0}.cfBattleChatLine.team{color:#b9dcff}
+      .cfBattleChatLine.all.GR{color:#8cc8ff}.cfBattleChatLine.all.BL{color:#f5c76d}
+      #cfBattleChatForm{display:none;gap:6px;align-items:center;margin-top:5px;padding:7px;
+        background:rgba(12,17,23,.88);border:1px solid rgba(255,255,255,.25);border-radius:6px;pointer-events:auto;text-shadow:none}
+      #cfBattleChat.open #cfBattleChatForm{display:flex}
+      #cfBattleChatChannel,#cfBattleChatSend{padding:5px 7px;background:#263442;color:#fff;border:1px solid #738394;border-radius:4px;cursor:pointer}
+      #cfBattleChatInput{flex:1;min-width:0;padding:6px;background:#111b25;color:#fff;border:1px solid #738394;border-radius:4px}
+      #cfBattleEmoji{position:relative;flex:none}
+      #cfBattleEmojiToggle{padding:5px 6px;background:#263442;color:#fff;border:1px solid #738394;border-radius:4px;cursor:pointer}
+      #cfBattleEmojiPanel{display:none;position:absolute;bottom:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 48px));
+        max-height:210px;overflow-y:auto;grid-template-columns:repeat(7,1fr);gap:3px;padding:8px;
+        background:#211c17;border:1px solid #a87831;border-radius:8px;box-shadow:0 10px 30px #000a}
+      #cfBattleEmoji.open #cfBattleEmojiPanel{display:grid}
+      #cfBattleEmojiPanel button{padding:5px 0;background:transparent;border:1px solid transparent;border-radius:5px;font-size:20px;cursor:pointer}
+      #cfBattleEmojiPanel button:hover,#cfBattleEmojiPanel button:focus-visible{background:#624523;border-color:#d7a45d}
+      #cfBattleChatHint{font-size:11px;color:#ccc;margin:3px 5px}
+    `;
+    document.head.appendChild(style);
+    const root = document.createElement('div');
+    root.id = 'cfBattleChat';
+    root.hidden = true;
+    root.innerHTML = '<div id="cfBattleChatLog" role="log" aria-label="对局聊天"></div><div id="cfBattleChatHint">Enter 聊天 · Esc 取消</div><form id="cfBattleChatForm"><button type="button" id="cfBattleChatChannel">队伍</button><input id="cfBattleChatInput" maxlength="200" autocomplete="off" aria-label="对局聊天消息"><div id="cfBattleEmoji"><button type="button" id="cfBattleEmojiToggle" aria-label="选择表情" aria-expanded="false">😊</button><div id="cfBattleEmojiPanel" aria-label="表情列表"></div></div><button type="submit" id="cfBattleChatSend">发送</button></form>';
+    document.body.appendChild(root);
+    const log = root.querySelector('#cfBattleChatLog');
+    const input = root.querySelector('#cfBattleChatInput');
+    const channelButton = root.querySelector('#cfBattleChatChannel');
+    const emoji = root.querySelector('#cfBattleEmoji');
+    const emojiToggle = root.querySelector('#cfBattleEmojiToggle');
+    const emojiPanel = root.querySelector('#cfBattleEmojiPanel');
+    function closeEmoji() {
+      emoji.classList.remove('open');
+      emojiToggle.setAttribute('aria-expanded', 'false');
+    }
+    emojiToggle.onclick = () => {
+      const shown = emoji.classList.toggle('open');
+      emojiToggle.setAttribute('aria-expanded', String(shown));
+    };
+    for (const symbol of ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','🥰','😘','😗','😋','😎','🤩','🥳','😏','😔','😢','😭','😤','😡','🤯','😱','😨','😴','🤔','🤫','🤭','🤗','🫠','🙄','😬','🥺','😈','👻','💀','🤖','👽','👍','👎','👏','🙌','👋','🤝','🙏','💪','✌️','👌','🫶','❤️','🧡','💛','💚','💙','💜','💔','🔥','✨','⭐','💯','🎉','🎊','🎮','🏆','🚀','🌈','🍀','🐱','🐶','🐼','🍕','☕']) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = symbol;
+      button.title = '插入 ' + symbol;
+      button.onclick = () => {
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? start;
+        if (input.value.length + symbol.length - (end - start) > input.maxLength) return;
+        input.setRangeText(symbol, start, end, 'end');
+        input.focus();
+      };
+      emojiPanel.appendChild(button);
+    }
+    document.addEventListener('pointerdown', (event) => {
+      if (!emoji.contains(event.target)) closeEmoji();
+    });
+    let channel = 'team';
+    let open = false;
+    let chatUnlockPending = false;
+    const originalLockChange = game.onLockChange.bind(game);
+    game.onLockChange = function () {
+      if (open && document.pointerLockElement === document.getElementById('c')) {
+        chatUnlockPending = false;
+        setOpen(false);
+        originalLockChange();
+        return;
+      }
+      if ((open || chatUnlockPending) && document.pointerLockElement !== document.getElementById('c')) {
+        chatUnlockPending = false;
+        game.locked = false;
+        return;
+      }
+      originalLockChange();
+    };
+    function setOpen(value, relock = false) {
+      open = value;
+      root.classList.toggle('open', open);
+      if (game.player) {
+        game.player.keys.clear();
+        game.player.pressed.clear();
+        game.player.mouse.l = game.player.mouse.r = false;
+        game.player.touch.fire = false;
+        game.player.touch.mx = game.player.touch.mz = 0;
+      }
+      if (open) {
+        if (document.pointerLockElement) {
+          chatUnlockPending = true;
+          document.exitPointerLock();
+        }
+        input.focus();
+      } else {
+        closeEmoji();
+        input.value = '';
+        input.blur();
+        if (relock && MP.active && game.playing && !game.ended && !game.paused) game.lock();
+      }
+    }
+    function redraw() {
+      log.replaceChildren();
+      for (const message of MP.room.chat.slice(-7)) {
+        const line = document.createElement('div');
+        line.className = 'cfBattleChatLine ' + (message.channel === 'team' ? 'team' : 'all') + ' ' + (message.team || '');
+        line.textContent = `[${message.channel === 'team' ? '队伍' : '全体'}] ${message.name}：${message.text}${message.pending ? ' · 发送中' : message.failed ? ' · 失败' : ''}`;
+        log.appendChild(line);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+    channelButton.onclick = () => {
+      channel = channel === 'team' ? 'all' : 'team';
+      channelButton.textContent = channel === 'team' ? '队伍' : '全体';
+      input.focus();
+    };
+    function submitChat() {
+      const text = input.value.trim();
+      if (!text) { setOpen(false); return; }
+      if (!MP.room.sendChat(text, channel)) return;
+      setOpen(false, true);
+    }
+    const form = root.querySelector('#cfBattleChatForm');
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      submitChat();
+    };
+    form.addEventListener('keydown', (event) => {
+      if (event.code === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+      } else if (event.target === input && event.code === 'Enter' && !event.isComposing && event.keyCode !== 229) {
+        event.preventDefault();
+        submitChat();
+      }
+      event.stopPropagation();
+    });
+    window.addEventListener('keydown', (event) => {
+      if (!MP.active || !game.playing || game.ended) return;
+      if (!open && event.code === 'Enter' && !event.repeat) {
+        if (game.paused) return;
+        event.preventDefault(); event.stopImmediatePropagation(); setOpen(true); return;
+      }
+      if (!open) return;
+      if (form.contains(event.target)) return;
+      event.stopImmediatePropagation();
+    }, true);
+    window.addEventListener('keyup', (event) => {
+      if (open || (MP.active && event.code === 'Enter')) event.stopImmediatePropagation();
+    }, true);
+    MP.room.on('chat', redraw);
+    MP.room.on('chat_history', redraw);
+    MP.room.on('chat_status', redraw);
+    MP.room.on('start', () => { root.hidden = false; redraw(); });
+    for (const type of ['end', 'close', 'kicked']) MP.room.on(type, () => {
+      if (open) setOpen(false);
+      root.hidden = true;
+    });
+    MP.hideBattleChat = () => { if (open) setOpen(false); root.hidden = true; };
   }
 
   /* ------------------------------------------------------------------ */
@@ -257,6 +419,7 @@
     game.hooks.replace('quitToMenu', function () {
       if (MP.active) {
         MP.active = false;
+        MP.hideBattleChat?.();
         if (MP.sendTimer) { clearInterval(MP.sendTimer); MP.sendTimer = 0; }
         try { MP.room.leave(); } catch (_) {}
       }

@@ -176,6 +176,25 @@ async function handleSocial(req, res, rel) {
     if (rel === '/api/social/friends' && req.method === 'GET')
       return json(res, 200, { friends: social.friends(me.id).map((p) => ({ ...p, ...presenceFor(p.accountId) })) });
     if (rel === '/api/social/requests' && req.method === 'GET') return json(res, 200, { requests: social.requests(me.id) });
+    if (rel.startsWith('/api/social/messages/') && req.method === 'GET') {
+      const target = rel.slice('/api/social/messages/'.length);
+      return json(res, 200, social.privateHistory(me.id, target, url.searchParams.get('before')));
+    }
+    if (rel.startsWith('/api/social/messages/') && rel.endsWith('/read') && req.method === 'POST') {
+      const target = rel.slice('/api/social/messages/'.length, -'/read'.length);
+      const result = social.markPrivateRead(me.id, target);
+      if (result.ids.length) for (const player of clients.values()) if (player.accountId === target && player.ws.readyState === player.ws.OPEN)
+        send(player.ws, { t: 'private_read', otherId: me.id, ...result });
+      return json(res, 200, result);
+    }
+    if (rel.startsWith('/api/social/messages/') && req.method === 'POST') {
+      const target = rel.slice('/api/social/messages/'.length);
+      const body = await readJson(req);
+      const message = social.sendPrivate(me.id, target, body.text);
+      for (const player of clients.values()) if ((player.accountId === me.id || player.accountId === target) && player.ws.readyState === player.ws.OPEN)
+        send(player.ws, { t: 'private_message', otherId: player.accountId === me.id ? target : me.id, message });
+      return json(res, 200, { message });
+    }
     if (rel.startsWith('/api/social/friends/') && req.method === 'DELETE') {
       const target = rel.slice('/api/social/friends/'.length);
       social.removeFriend(me.id, target);
@@ -424,6 +443,7 @@ function createRoom(cfg, selectedMap) {
     state: 'lobby',
     host: null,
     players: new Map(),
+    chat: [],
     kickedAccounts: new Set(),
     botActors: new Map(),
     botState: [],
@@ -465,6 +485,7 @@ function joinRoom(player, room, team) {
   player.joining = false;
   player.pendingBattle = false;
   room.players.set(player.netId, player);
+  player.lastChatAt = 0;
   if (!room.host) room.host = player.netId;
   broadcastPresence();
 }
@@ -538,6 +559,7 @@ function startMatch(room) {
     p.combat = null;
   }
   const roster = players.map(playerBrief);
+  broadcast(room, { t: 'room', room: roomBrief(room) });
   for (const p of players) {
     const myTeam = p.team;
     // 只告诉每个人"除自己以外"的名单 —— 自己由本地 player 对象表示
@@ -1052,6 +1074,7 @@ function handle(player, msg) {
       const r = createRoom(msg, selectedMap);
       joinRoom(player, r, msg.team === 'BL' || msg.team === 'GR' ? msg.team : 'BL');
       broadcast(r, { t: 'room', room: roomBrief(r) });
+      send(player.ws, { t: 'chat_history', roomId: r.id, messages: r.chat.filter((m) => m.channel !== 'team' || m.team === player.team) });
       sendRoomListToLobbyIdle();
       log(`房间 ${r.id} 创建 by ${player.name}（${r.size}v${r.size}）`);
       return;
@@ -1082,12 +1105,41 @@ function handle(player, msg) {
       }
       broadcastPresence();
       broadcast(r, { t: 'room', room: roomBrief(r) });
+      send(player.ws, { t: 'chat_history', roomId: r.id, messages: r.chat.filter((m) => m.channel !== 'team' || m.team === player.team) });
       send(player.ws, { t: 'joined', roomId: r.id });
       sendRoomListToLobbyIdle();
       return;
     }
 
     /* ---------------- 房间内 ---------------- */
+    case 'chat': {
+      if (!room) { send(player.ws, { t: 'err', msg: '请先进入房间' }); return; }
+      if (typeof msg.text !== 'string') return;
+      const body = msg.text.trim();
+      const channel = msg.channel === 'team' ? 'team' : 'all';
+      if (channel === 'team' && !player.team) {
+        send(player.ws, { t: 'err', msg: '当前无法发送队伍消息' }); return;
+      }
+      if (!body || body.length > 200 || /[\u0000-\u001f\u007f]/.test(body)) {
+        send(player.ws, { t: 'err', msg: '消息须为 1–200 字，且不能包含控制字符' }); return;
+      }
+      const sentAt = now();
+      if (sentAt - (player.lastChatAt || 0) < 1000) {
+        send(player.ws, { t: 'err', msg: '发送太频繁，请稍后再试' }); return;
+      }
+      player.lastChatAt = sentAt;
+      const message = { id: crypto.randomUUID(), roomId: room.id, netId: player.netId,
+        channel, team: player.team,
+        name: player.name, text: body, sentAt,
+        clientId: typeof msg.clientId === 'string' && /^[a-f0-9-]{36}$/.test(msg.clientId) ? msg.clientId : null };
+      room.chat.push(message);
+      if (room.chat.length > 50) room.chat.shift();
+      if (channel === 'team') {
+        for (const member of room.players.values()) if (member.team === player.team) send(member.ws, { t: 'chat', message });
+      } else broadcast(room, { t: 'chat', message });
+      return;
+    }
+
     case 'team': {
       if (!room || (room.state !== 'lobby' && !player.pendingBattle)) return;
       const team = msg.team === 'BL' || msg.team === 'GR' ? msg.team : null;

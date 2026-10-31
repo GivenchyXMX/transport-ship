@@ -12,6 +12,7 @@
     BL: { name: '潜伏者', color: '#ff9b70', desc: 'Black List' },
     GR: { name: '保卫者', color: '#8cc8ff', desc: 'Global Risk' },
   };
+  const CHAT_EMOJI = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','🥰','😘','😗','😋','😎','🤩','🥳','😏','😔','😢','😭','😤','😡','🤯','😱','😨','😴','🤔','🤫','🤭','🤗','🫠','🙄','😬','🥺','😈','👻','💀','🤖','👽','👍','👎','👏','🙌','👋','🤝','🙏','💪','✌️','👌','🫶','❤️','🧡','💛','💚','💙','💜','💔','🔥','✨','⭐','💯','🎉','🎊','🎮','🏆','🚀','🌈','🍀','🐱','🐶','🐼','🍕','☕'];
   const DEFAULT_MAP = { id: 'transport-ship', version: 1, displayName: '运输船',
     poster: '/web/assets/maps/cf-transport-ship.png' };
 
@@ -37,6 +38,27 @@
   .cfMainNav button.cf{padding:8px 15px;white-space:nowrap}
   .cfMainNav button.cf.active{background:rgba(245,179,33,.14);border-color:rgba(245,179,33,.5);color:#f5c76d}
   .cfBody{padding:18px 20px;min-width:0;min-height:0;overflow-y:auto;scrollbar-gutter:stable;flex:1}
+  .cfBody.cfRoomBody{display:flex;flex-direction:column;overflow:hidden;padding:10px 16px 12px}
+  .cfRoomContent{flex:1;min-height:0;overflow-y:auto;scrollbar-gutter:stable}
+  .cfRoomContent .cfRoomIntro{margin-bottom:8px}.cfRoomContent .cfMapPoster{width:160px}
+  .cfRoomContent .cfTeam h3{padding:6px 10px}.cfRoomContent .cfSlot{padding:5px 10px;min-height:22px}
+  .cfRoomContent .cfTeams{gap:10px}
+  .cfChat{flex:none;margin:8px 0 0;padding:7px 9px;border:1px solid rgba(255,255,255,.13);border-radius:10px;background:rgba(0,0,0,.22)}
+  .cfChat .cfSectionTitle{margin-bottom:3px}
+  .cfChatLog{height:58px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;margin:3px 0 6px;font-size:12px;overflow-wrap:anywhere}
+  .cfChatLine{flex:none;line-height:1.5}.cfChatWho{color:#f5c76d;margin-right:7px}.cfChatTime{color:#888;margin-right:7px}
+  .cfChatLine.pending{opacity:.6}.cfChatLine.failed{color:#ee8888}
+  .cfChatLine.all.GR,.cfChatLine.all.GR .cfChatWho{color:#8cc8ff}
+  .cfChatLine.all.BL,.cfChatLine.all.BL .cfChatWho{color:#f5c76d}
+  .cfEmojiPicker{position:relative;flex:none}.cfEmojiToggle{white-space:nowrap}
+  .cfEmojiPanel{position:absolute;z-index:30;bottom:calc(100% + 7px);right:0;width:min(320px,calc(100vw - 70px));
+    max-height:230px;overflow-y:auto;display:none;grid-template-columns:repeat(7,1fr);gap:3px;padding:8px;
+    border:1px solid rgba(245,179,33,.45);border-radius:9px;background:#211c17;box-shadow:0 12px 30px rgba(0,0,0,.55)}
+  .cfEmojiPicker.open .cfEmojiPanel{display:grid}
+  .cfEmojiPanel button{font-size:21px;line-height:1.3;padding:5px 0;border:1px solid transparent;border-radius:6px;background:transparent;cursor:pointer}
+  .cfEmojiPanel button:hover,.cfEmojiPanel button:focus-visible{border-color:#f5b321;background:rgba(245,179,33,.15)}
+  .cfChatForm{display:flex;gap:8px}.cfChatForm input{flex:1;min-width:0}.cfChatForm button{flex:none}
+  .cfRoomBody .cfFoot{flex:none;padding:8px 0 0}
   .cfOnlinePanel{padding:18px 14px;border-left:1px solid rgba(255,255,255,.08);min-width:0;min-height:0;
     overflow-y:auto;scrollbar-gutter:stable}
   .cfAccountCard{display:flex;gap:10px;align-items:flex-start;padding:12px;margin-bottom:16px;border:1px solid rgba(245,179,33,.25);border-radius:10px;background:rgba(245,179,33,.06)}
@@ -67,6 +89,32 @@
   .cfSocialSearch{width:100%;box-sizing:border-box;margin-bottom:8px}
   .cfSocialActions{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
   .cfSocialActions button{padding:4px 7px!important;font-size:10px!important}
+  #cfPrivatePanel{position:fixed;right:18px;bottom:18px;z-index:100002;width:min(600px,calc(100vw - 36px));height:min(470px,calc(100dvh - 36px));display:none;
+    background:#211c17;border:1px solid rgba(245,179,33,.5);border-radius:10px;box-shadow:0 18px 50px #0009;color:#eee;font:13px system-ui,sans-serif}
+  #cfPrivatePanel.open{display:flex;flex-direction:column}.cfPrivateHead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #ffffff22}
+  .cfPrivateLayout{display:grid;grid-template-columns:150px minmax(0,1fr);flex:1;min-height:0}.cfPrivatePeers{overflow-y:auto;border-right:1px solid #ffffff22}
+  .cfPrivatePeer{display:block;width:100%;padding:10px;text-align:left;color:#eee;background:transparent;border:0;border-bottom:1px solid #ffffff12;cursor:pointer}
+  .cfPrivatePeer.active{background:#6a4a21}.cfPrivateThread{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .cfUnreadDot{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 2px;margin-left:5px;
+    border-radius:12px;background:#3ddc84;box-shadow:0 0 8px #3ddc84;color:#092513;font-size:10px;font-weight:700;
+    text-shadow:none;vertical-align:middle;animation:cfUnreadPulse 1s infinite alternate}
+  @keyframes cfUnreadPulse{from{opacity:.3}to{opacity:1}}
+  .cfPrivateLog{flex:1;overflow-y:auto;padding:10px;overflow-wrap:anywhere}
+  .cfPrivateLine{display:flex;align-items:flex-start;gap:7px;margin:9px 0}.cfPrivateLine.mine{flex-direction:row-reverse}
+  .cfPrivateAvatar{display:flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;border-radius:7px;
+    background:#394551;border:1px solid #ffffff33;color:#eee;font-weight:700}
+  .cfPrivateLine.mine .cfPrivateAvatar{background:#68502e}
+  .cfPrivateStack{display:flex;flex-direction:column;align-items:flex-start;max-width:75%}
+  .cfPrivateLine.mine .cfPrivateStack{align-items:flex-end}
+  .cfPrivateBubble{max-width:100%;box-sizing:border-box;padding:7px 9px;border-radius:8px;background:#35404b;line-height:1.5}
+  .cfPrivateLine.mine .cfPrivateBubble{background:#695026}.cfPrivateMeta{display:block;color:#bbb;font-size:10px;margin-bottom:3px}
+  .cfPrivateStatus{align-self:flex-start;margin:3px 0 0 2px;color:#a9b5bf;font-size:10px}
+  .cfPrivateForm{display:flex;gap:6px;padding:9px;border-top:1px solid #ffffff22}.cfPrivateForm input{flex:1;min-width:0}
+  .cfPrivateEmoji{position:relative;flex:none}.cfPrivateEmojiPanel{display:none;position:absolute;bottom:calc(100% + 8px);right:0;
+    width:min(300px,calc(100vw - 54px));max-height:210px;overflow-y:auto;grid-template-columns:repeat(7,1fr);gap:3px;padding:8px;
+    background:#211c17;border:1px solid #a87831;border-radius:8px;box-shadow:0 10px 30px #000a}
+  .cfPrivateEmoji.open .cfPrivateEmojiPanel{display:grid}.cfPrivateEmojiPanel button{font-size:20px;border:0;background:transparent;cursor:pointer}
+  @media(max-width:520px){.cfPrivateLayout{grid-template-columns:100px minmax(0,1fr)}}
   .cfStatusDot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:#777;vertical-align:middle}
   .cfStatusDot.online{background:#3ddc84}.cfStatusDot.room{background:#f5c241}
   .cfStatusDot.battle{background:#ed5961}.cfStatusDot.offline{background:#777}
@@ -259,6 +307,7 @@
         || (id === DEFAULT_MAP.id ? DEFAULT_MAP : { id, displayName: id || '未知地图', poster: DEFAULT_MAP.poster });
       let selectedMapId = DEFAULT_MAP.id;
       let selectedSize = '5', selectedGoal = '50';
+      let roomChatChannel = 'all';
       let dropdownSeq = 0;
 
       if (!document.getElementById('cfMpStyle')) {
@@ -353,6 +402,12 @@
         root.querySelectorAll('.cfDropdown.open').forEach((open) => {
           if (!open.contains(event.target)) closeDropdown(open);
         });
+        root.querySelectorAll('.cfEmojiPicker.open').forEach((open) => {
+          if (!open.contains(event.target)) {
+            open.classList.remove('open');
+            open.querySelector('.cfEmojiToggle').setAttribute('aria-expanded', 'false');
+          }
+        });
       });
 
       const bgmTracks = {
@@ -439,6 +494,154 @@
       invitePopup.id = 'cfInvitePopup';
       invitePopup.style.display = 'none';
       document.body.appendChild(invitePopup);
+      const privatePanel = el('div');
+      privatePanel.id = 'cfPrivatePanel';
+      privatePanel.innerHTML = '<div class="cfPrivateHead"><strong>好友私聊</strong><button class="cf ghost cfPrivateClose" type="button">关闭</button></div><div class="cfPrivateLayout"><div class="cfPrivatePeers"></div><div class="cfPrivateThread"><div class="cfPrivateLog"></div><form class="cfPrivateForm"><input class="cf" maxlength="500" placeholder="发送给好友" aria-label="私聊消息"><button class="cf" type="submit">发送</button></form></div></div>';
+      document.body.appendChild(privatePanel);
+      const privatePeers = privatePanel.querySelector('.cfPrivatePeers');
+      const privateLog = privatePanel.querySelector('.cfPrivateLog');
+      const privateInput = privatePanel.querySelector('.cfPrivateForm input');
+      const privateEmoji = el('div', 'cfPrivateEmoji');
+      const privateEmojiToggle = el('button', 'cf ghost', '😊');
+      privateEmojiToggle.type = 'button';
+      privateEmojiToggle.title = '选择表情';
+      privateEmojiToggle.setAttribute('aria-expanded', 'false');
+      const privateEmojiPanel = el('div', 'cfPrivateEmojiPanel');
+      for (const symbol of CHAT_EMOJI) {
+        const button = el('button');
+        button.type = 'button';
+        button.textContent = symbol;
+        button.onclick = () => {
+          const start = privateInput.selectionStart ?? privateInput.value.length;
+          const end = privateInput.selectionEnd ?? start;
+          if (privateInput.value.length + symbol.length - (end - start) > privateInput.maxLength) return;
+          privateInput.setRangeText(symbol, start, end, 'end');
+          privateInput.focus();
+        };
+        privateEmojiPanel.appendChild(button);
+      }
+      privateEmoji.append(privateEmojiToggle, privateEmojiPanel);
+      privateInput.after(privateEmoji);
+      privateEmojiToggle.onclick = () => {
+        const shown = privateEmoji.classList.toggle('open');
+        privateEmojiToggle.setAttribute('aria-expanded', String(shown));
+      };
+      document.addEventListener('pointerdown', (event) => {
+        if (!privateEmoji.contains(event.target)) {
+          privateEmoji.classList.remove('open');
+          privateEmojiToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+      let privateTarget = null;
+      let privateMessages = [];
+      let privateBefore = null;
+      let privateLoadSeq = 0;
+      const privateUnread = new Map();
+      const privateReadReceipts = new Map();
+      privatePanel.querySelector('.cfPrivateClose').onclick = () => privatePanel.classList.remove('open');
+
+      function renderPrivatePeers() {
+        privatePeers.replaceChildren();
+        for (const person of socialFriends) {
+          const button = el('button', 'cfPrivatePeer' + (privateTarget === person.accountId ? ' active' : ''));
+          const unread = privateUnread.get(person.accountId) || 0;
+          button.textContent = person.name;
+          if (unread) {
+            const dot = el('span', 'cfUnreadDot');
+            dot.title = `${unread} 条新消息`;
+            dot.textContent = String(unread > 99 ? '99+' : unread);
+            button.appendChild(dot);
+          }
+          button.onclick = () => void openPrivate(person.accountId);
+          privatePeers.appendChild(button);
+        }
+      }
+      function renderPrivateMessages() {
+        privateLog.replaceChildren();
+        if (privateBefore) {
+          const more = el('button', 'cf ghost', '加载更早消息');
+          more.onclick = () => void loadPrivate(true);
+          privateLog.appendChild(more);
+        }
+        if (!privateMessages.length) privateLog.appendChild(el('div', 'cfTip', '还没有私聊消息'));
+        for (const message of privateMessages) {
+          const line = el('div', 'cfPrivateLine' + (message.senderId === authUser?.id ? ' mine' : ''));
+          const mine = message.senderId === authUser?.id;
+          const senderName = mine ? authUser?.name || '我' : socialFriends.find((p) => p.accountId === privateTarget)?.name || '好友';
+          const avatar = el('span', 'cfPrivateAvatar');
+          avatar.setAttribute('aria-label', `${senderName}头像占位`);
+          avatar.textContent = senderName.slice(0, 1);
+          const bubble = el('div', 'cfPrivateBubble');
+          const stack = el('div', 'cfPrivateStack');
+          const meta = el('span', 'cfPrivateMeta');
+          meta.textContent = `${mine ? '我' : senderName} · ${new Date(message.createdAt).toLocaleString('zh-CN')}`;
+          bubble.append(meta, document.createTextNode(message.body));
+          stack.appendChild(bubble);
+          if (mine) stack.appendChild(el('span', 'cfPrivateStatus', message.readAt ? '已读' : '未读'));
+          line.append(avatar, stack);
+          privateLog.appendChild(line);
+        }
+        privateLog.scrollTop = privateLog.scrollHeight;
+      }
+      async function loadPrivate(older = false) {
+        if (!privateTarget) return;
+        const target = privateTarget;
+        const seq = ++privateLoadSeq;
+        try {
+          const data = await socialRequest(`messages/${encodeURIComponent(target)}${older && privateBefore ? '?before=' + encodeURIComponent(privateBefore) : ''}`);
+          if (target !== privateTarget || seq !== privateLoadSeq) return;
+          const messages = data.messages.map((message) => ({ ...message,
+            readAt: privateReadReceipts.get(message.id) || message.readAt }));
+          privateMessages = older ? [...messages, ...privateMessages] : messages;
+          privateBefore = data.nextBefore;
+          renderPrivateMessages();
+        } catch (error) { if (seq === privateLoadSeq) privateLog.textContent = error.message; }
+      }
+      async function openPrivate(accountId) {
+        if (!socialFriends.some((p) => p.accountId === accountId)) return;
+        privatePanel.classList.add('open');
+        privateUnread.delete(accountId);
+        const side = root.querySelector('.cfOnlinePanel');
+        if (side) renderSocialPanel(side);
+        if (privateTarget !== accountId) {
+          privateTarget = accountId;
+          privateMessages = [];
+          privateBefore = null;
+          privateLog.textContent = '正在加载消息…';
+          void loadPrivate();
+        }
+        renderPrivatePeers();
+        void markPrivateRead(accountId);
+        privateInput.focus();
+      }
+      async function markPrivateRead(accountId) {
+        try {
+          const result = await socialRequest(`messages/${encodeURIComponent(accountId)}/read`, 'POST', {});
+          privateUnread.delete(accountId);
+          if (privateTarget === accountId) {
+            const ids = new Set(result.ids);
+            for (const message of privateMessages) if (ids.has(message.id)) message.readAt = result.readAt;
+            renderPrivateMessages();
+          }
+          renderPrivatePeers();
+          const side = root.querySelector('.cfOnlinePanel');
+          if (side) renderSocialPanel(side);
+        } catch (_) {}
+      }
+      privatePanel.querySelector('.cfPrivateForm').onsubmit = async (event) => {
+        event.preventDefault();
+        const text = privateInput.value.trim();
+        if (!text || !privateTarget) return;
+        const target = privateTarget;
+        try {
+          const data = await socialRequest(`messages/${encodeURIComponent(target)}`, 'POST', { text });
+          if (privateTarget !== target) return;
+          if (!privateMessages.some((m) => m.id === data.message.id)) privateMessages.push({ ...data.message,
+            readAt: privateReadReceipts.get(data.message.id) || data.message.readAt });
+          privateInput.value = '';
+          renderPrivateMessages();
+        } catch (error) { window.alert(error.message); }
+      };
 
       async function socialRequest(path, method = 'GET', body) {
         const response = await fetch('/api/social/' + path, {
@@ -462,6 +665,15 @@
           ]);
           if (seq !== socialSeq) return;
           socialFriends = friends.friends || [];
+          privateUnread.clear();
+          for (const person of socialFriends) if (person.unreadCount) privateUnread.set(person.accountId, person.unreadCount);
+          if (privateTarget && !socialFriends.some((p) => p.accountId === privateTarget)) {
+            privatePanel.classList.remove('open');
+            privateTarget = null;
+            privateMessages = [];
+            privateBefore = null;
+          }
+          renderPrivatePeers();
           socialPlayers = players.players || [];
           socialNextCursor = players.nextCursor;
           socialRequests = requests.requests || [];
@@ -615,6 +827,16 @@
           } else if (relation === 'sent') actions.appendChild(el('span', 'cfTip', '申请已发出'));
           else if (relation === 'received') actions.appendChild(el('span', 'cfTip', '请处理申请'));
           if (relation === 'friend') {
+            const unread = privateUnread.get(person.accountId) || 0;
+            const chat = el('button', 'cf ghost', '私聊');
+            if (unread) {
+              const dot = el('span', 'cfUnreadDot');
+              dot.title = `${unread} 条新消息`;
+              dot.textContent = String(unread > 99 ? '99+' : unread);
+              chat.appendChild(dot);
+            }
+            chat.onclick = () => void openPrivate(person.accountId);
+            actions.appendChild(chat);
             const remove = el('button', 'cf ghost', '删除');
             remove.onclick = () => {
               if (window.confirm(`确定删除好友 ${person.name}？`)) void socialAction(() => socialRequest(`friends/${encodeURIComponent(person.accountId)}`, 'DELETE'));
@@ -812,6 +1034,11 @@
 
       async function signOut() {
         room.net.close();
+        privatePanel.classList.remove('open');
+        privateTarget = null;
+        privateMessages = [];
+        privateUnread.clear();
+        privateReadReceipts.clear();
         room.name = '';
         leaderboardOpen = false;
         rankOpen = false;
@@ -989,8 +1216,12 @@
 
       /* ---------------- 房间页 ---------------- */
       function renderRoom(body) {
+        body.classList.add('cfRoomBody');
+        const details = el('div', 'cfRoomContent');
+        body.appendChild(details);
         const r = room.room;
         const me = room.me;
+        if (!me?.team) roomChatChannel = 'all';
         const choosingBattle = r.state === 'playing' && !!me?.pendingBattle;
         const canChangeTeam = r.state === 'lobby' || choosingBattle;
         const kickButton = (player) => {
@@ -1004,7 +1235,8 @@
         const friendButton = (player) => {
           if (!player.accountId || player.accountId === authUser?.id) return null;
           const relation = relationFor(player.accountId);
-          if (relation === 'friend' || relation === 'sent') return null;
+          if (relation === 'friend') return null;
+          if (relation === 'sent') return null;
           const button = el('button', 'cf ghost cfOnlineFollow', relation === 'received' ? '处理好友申请' : '加好友');
           button.onclick = () => {
             if (relation === 'received') {
@@ -1021,7 +1253,7 @@
         const selectedMap = mapInfo(r.map);
         intro.appendChild(el('aside', 'cfMapPoster',
           `<img src="${esc(selectedMap.poster)}" alt="${esc(selectedMap.displayName)}地图海报"><span>当前地图 · ${esc(selectedMap.displayName)}</span>`));
-        body.appendChild(intro);
+        details.appendChild(intro);
 
         const teams = el('div', 'cfTeams');
         const slots = room.slots();
@@ -1057,11 +1289,11 @@
           }
           teams.appendChild(box);
         });
-        body.appendChild(teams);
+        details.appendChild(teams);
 
         const unassigned = r.players.filter((p) => !p.team);
         if (unassigned.length) {
-          body.appendChild(el('div', 'cfTip', '等待选择阵营：'));
+          details.appendChild(el('div', 'cfTip', '等待选择阵营：'));
           for (const p of unassigned) {
             const row = el('div', 'cfSlot');
             const name = playerIdentity(p.name, p.email, 'cfSlotName');
@@ -1070,17 +1302,84 @@
             const add = friendButton(p);
             if (add) row.appendChild(add);
             if (room.isHost) row.appendChild(kickButton(p));
-            body.appendChild(row);
+            details.appendChild(row);
           }
         }
         const full = r.players.length >= r.size * 2;
         const hasBothTeams = ['BL', 'GR'].every((team) => r.players.some((p) => p.team === team));
-        body.appendChild(el('div', 'cfTip',
+        details.appendChild(el('div', 'cfTip',
           r.state === 'playing' ? (choosingBattle ? '对局进行中：请先选择有空位的阵营，再点击「加入战斗」。' : '对局进行中。')
             : !hasBothTeams ? '潜伏者和保卫者阵营都至少需要 1 名玩家才能开始；加入房间会自动分配到人数较少的阵营。'
                             : full ? '房间已满，房主可以开始对战。'
                                    : '两边都已有玩家，房主可以开始对战。'));
-        if (inviteStatus) body.appendChild(el('div', 'cfTip', esc(inviteStatus)));
+        if (inviteStatus) details.appendChild(el('div', 'cfTip', esc(inviteStatus)));
+
+        const chat = el('section', 'cfChat');
+        chat.appendChild(el('div', 'cfSectionTitle', '房间聊天'));
+        const log = el('div', 'cfChatLog');
+        log.setAttribute('role', 'log');
+        log.setAttribute('aria-label', '房间聊天消息');
+        renderChatLog(log);
+        chat.appendChild(log);
+        const form = el('form', 'cfChatForm');
+        const channelButton = el('button', 'cf ghost', roomChatChannel === 'team' ? '队伍' : '全体');
+        channelButton.type = 'button';
+        channelButton.disabled = !me?.team;
+        channelButton.title = '切换聊天频道';
+        channelButton.onclick = () => {
+          roomChatChannel = roomChatChannel === 'team' ? 'all' : 'team';
+          channelButton.textContent = roomChatChannel === 'team' ? '队伍' : '全体';
+        };
+        const input = el('input', 'cf');
+        input.maxLength = 200;
+        input.placeholder = '输入消息，按 Enter 发送';
+        input.setAttribute('aria-label', '聊天消息');
+        const emoji = el('div', 'cfEmojiPicker');
+        const emojiToggle = el('button', 'cf ghost cfEmojiToggle', '😊 表情');
+        emojiToggle.type = 'button';
+        emojiToggle.setAttribute('aria-label', '选择表情');
+        emojiToggle.setAttribute('aria-expanded', 'false');
+        const emojiPanel = el('div', 'cfEmojiPanel');
+        emojiPanel.setAttribute('aria-label', '表情列表');
+        emojiToggle.onclick = () => {
+          const open = emoji.classList.toggle('open');
+          emojiToggle.setAttribute('aria-expanded', String(open));
+        };
+        emoji.onkeydown = (event) => {
+          if (event.key === 'Escape') {
+            emoji.classList.remove('open');
+            emojiToggle.setAttribute('aria-expanded', 'false');
+            emojiToggle.focus();
+          }
+        };
+        for (const symbol of CHAT_EMOJI) {
+          const button = el('button');
+          button.type = 'button';
+          button.textContent = symbol;
+          button.title = '插入 ' + symbol;
+          button.onclick = () => {
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            if (input.value.length + symbol.length - (end - start) > input.maxLength) return;
+            input.setRangeText(symbol, start, end, 'end');
+            input.focus();
+          };
+          emojiPanel.appendChild(button);
+        }
+        emoji.append(emojiToggle, emojiPanel);
+        const sendButton = el('button', 'cf', '发送');
+        sendButton.type = 'submit';
+        form.onsubmit = (event) => {
+          event.preventDefault();
+          const text = input.value.trim();
+          if (!text) return;
+          if (!room.sendChat(text, roomChatChannel)) return;
+          input.value = '';
+          input.focus();
+        };
+        form.append(channelButton, input, emoji, sendButton);
+        chat.appendChild(form);
+        body.appendChild(chat);
 
         const foot = el('div', 'cfFoot');
         const btnLeave = el('button', 'cf ghost', '离开房间');
@@ -1103,6 +1402,23 @@
           foot.append(btnReady, btnStart);
         }
         body.appendChild(foot);
+      }
+
+      function appendChatLine(log, message) {
+        const line = el('div', 'cfChatLine ' + (message.channel === 'team' ? 'team' : 'all') + ' ' + (message.team || '') + (message.pending ? ' pending' : message.failed ? ' failed' : ''));
+        const time = el('span', 'cfChatTime');
+        time.textContent = new Date(message.sentAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const who = el('span', 'cfChatWho');
+        who.textContent = (message.channel === 'team' ? '[队伍] ' : '[全体] ') + message.name + '：';
+        line.append(time, who, document.createTextNode(message.text),
+          document.createTextNode(message.pending ? ' · 发送中' : message.failed ? ' · 发送失败，请检查服务器是否已重启' : ''));
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function renderChatLog(log) {
+        log.replaceChildren();
+        for (const message of room.chat) appendChatLine(log, message);
       }
 
       function renderLeaderboard(body) {
@@ -1169,6 +1485,7 @@
       function render() {
         const view = !room.registered ? 'connect' : rankOpen ? 'rank' : leaderboardOpen ? 'leaderboard' : (room.room ? 'room' : 'lobby');
         const previousBodyScroll = root.querySelector('.cfBody')?.scrollTop || 0;
+        const previousRoomScroll = root.querySelector('.cfRoomContent')?.scrollTop || 0;
         const previousPanelScroll = root.querySelector('.cfOnlinePanel')?.scrollTop || 0;
         root.innerHTML = '';
         const card = el('div', 'cfCard' + (room.registered ? ' hasOnline' : ''));
@@ -1242,6 +1559,7 @@
         syncBgm(root.classList.contains('hidden') || !authUser || !room.registered
           ? 'off' : room.room ? 'room' : 'lobby');
         if (view === lastView) body.scrollTop = previousBodyScroll;
+        if (view === 'room' && view === lastView) body.querySelector('.cfRoomContent').scrollTop = previousRoomScroll;
         const panel = root.querySelector('.cfOnlinePanel');
         if (panel) panel.scrollTop = previousPanelScroll;
 
@@ -1275,6 +1593,15 @@
         render();
       });
       room.on('room', () => { if (room.room) dismissInvite(); render(); });
+      room.on('chat_history', () => { if (room.room && !root.classList.contains('hidden')) render(); });
+      room.on('chat', (m) => {
+        const log = root.querySelector('.cfChatLog');
+        if (log && !root.classList.contains('hidden')) renderChatLog(log);
+      });
+      room.on('chat_status', () => {
+        const log = root.querySelector('.cfChatLog');
+        if (log) renderChatLog(log);
+      });
       room.on('invite', showInvite);
       room.on('invite_cancel', (m) => dismissInvite(m.inviteId));
       room.on('invite_status', (m) => {
@@ -1294,6 +1621,26 @@
         scheduleSocial();
       });
       room.net.on('social_changed', () => { void loadSocial(); });
+      room.net.on('private_message', (event) => {
+        if (!socialFriends.some((p) => p.accountId === event.otherId)) return;
+        if (privatePanel.classList.contains('open') && privateTarget === event.otherId) {
+          if (!privateMessages.some((m) => m.id === event.message.id)) privateMessages.push(event.message);
+          renderPrivateMessages();
+          if (event.message.senderId !== authUser?.id) void markPrivateRead(event.otherId);
+        } else if (event.message.senderId !== authUser?.id) {
+          privateUnread.set(event.otherId, (privateUnread.get(event.otherId) || 0) + 1);
+          renderPrivatePeers();
+          const panel = root.querySelector('.cfOnlinePanel');
+          if (panel) renderSocialPanel(panel);
+        }
+      });
+      room.net.on('private_read', (event) => {
+        if (privateTarget !== event.otherId) return;
+        const ids = new Set(event.ids);
+        for (const id of ids) privateReadReceipts.set(id, event.readAt);
+        for (const message of privateMessages) if (ids.has(message.id)) message.readAt = event.readAt;
+        if (privatePanel.classList.contains('open')) renderPrivateMessages();
+      });
       room.on('start', (m) => { lastSettlement = null; root.classList.add('hidden'); syncBgm('off'); opts.onStart && opts.onStart(m); });
       room.on('end', (m) => { lastSettlement = m; root.classList.remove('hidden'); render(); void loadRank(rankOpen); void loadSocial(); });
       room.on('err', (m) => {

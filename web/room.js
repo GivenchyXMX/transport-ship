@@ -41,6 +41,7 @@
       this.room = null;
       this.me = null;
       this.inGame = false;
+      this.chat = [];
       this._h = Object.create(null);
 
       net.on('welcome', (m) => { this.selfId = m.netId; this._e('welcome', m); });
@@ -48,18 +49,38 @@
       net.on('list',    (m) => { this.rooms = m.rooms; this.maps = Array.isArray(m.maps) ? m.maps : []; this._e('list', m); });
       net.on('presence', (m) => { this.online = Array.isArray(m.players) ? m.players : []; this._e('presence', m); });
       net.on('room',    (m) => {
+        if (this.room?.id !== m.room.id) this.chat = [];
         this.room = m.room;
         this.me = (m.room.players || []).find((p) => p.netId === this.selfId) || null;
+        this.chat = this.chat.filter((entry) => entry.channel !== 'team' || entry.team === this.me?.team);
         this._e('room', m);
       });
       net.on('joined',  (m) => this._e('joined', m));
+      net.on('chat_history', (m) => {
+        if (this.room?.id !== m.roomId) return;
+        this.chat = Array.isArray(m.messages) ? m.messages.slice(-50) : [];
+        this._e('chat_history', m);
+      });
+      net.on('chat', (m) => {
+        if (this.room?.id !== m.message?.roomId) return;
+        const pending = this.chat.findIndex((entry) => entry.pending && entry.clientId === m.message.clientId);
+        if (pending >= 0) this.chat.splice(pending, 1, m.message);
+        else this.chat.push(m.message);
+        if (this.chat.length > 50) this.chat.shift();
+        this._e('chat', m);
+      });
       net.on('kicked',  (m) => {
+        this.chat = [];
         this.room = null;
         this.me = null;
         this.inGame = false;
         this._e('kicked', m);
       });
-      net.on('start',   (m) => { this.inGame = true; this._e('start', m); });
+      net.on('start',   (m) => {
+        this.inGame = true;
+        if (this.room?.id === m.roomId) this.room.state = 'playing';
+        this._e('start', m);
+      });
       net.on('member_join', (m) => this._e('member_join', m));
       net.on('member_leave', (m) => this._e('member_leave', m));
       net.on('invite', (m) => this._e('invite', m));
@@ -71,10 +92,14 @@
       net.on('spawn',   (m) => this._e('spawn', m));
       net.on('correct', (m) => this._e('correct', m));
       net.on('bots',    (m) => this._e('bots', m));
-      net.on('end',     (m) => { this.inGame = false; this._e('end', m); });
+      net.on('end',     (m) => {
+        this.inGame = false;
+        if (this.room) this.room.state = 'lobby';
+        this._e('end', m);
+      });
       net.on('err',     (m) => { console.warn('[room]', m.msg); this._e('err', m); });
       net.on('open',    () => { if (this.name) this.hello(this.name); this._e('open'); });
-      net.on('close',   () => { this.registered = false; this.room = null; this.me = null; this.inGame = false; this.online = []; this._e('close'); this._e('presence', { players: [] }); });
+      net.on('close',   () => { this.registered = false; this.room = null; this.me = null; this.inGame = false; this.chat = []; this.online = []; this._e('close'); this._e('presence', { players: [] }); });
     }
 
     /* ---------------- 事件 ---------------- */
@@ -92,10 +117,29 @@
     refresh() { this.net.send({ t: 'list' }); }
     create(cfg) { this.net.send({ t: 'create', name: cfg.name, mapId: cfg.mapId, size: cfg.size, goal: cfg.goal, team: cfg.team || 'BL' }); }
     join(roomId, instanceId) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}) }); }
-    leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; }
+    leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; this.chat = []; }
 
     /* ---------------- 房间内 ---------------- */
     setTeam(team) { this.net.send({ t: 'team', team }); }
+    sendChat(text, channel = 'all') {
+      if (!this.room || !this.net.open) return false;
+      if (channel === 'team' && !this.me?.team) return false;
+      const clientId = crypto.randomUUID();
+      const message = { clientId, roomId: this.room.id, netId: this.selfId,
+        name: this.name, text, channel, team: this.me?.team || null,
+        sentAt: Date.now(), pending: true };
+      this.chat.push(message);
+      if (this.chat.length > 50) this.chat.shift();
+      this._e('chat', { message });
+      this.net.send({ t: 'chat', text, channel, clientId });
+      setTimeout(() => {
+        if (!message.pending || !this.chat.includes(message)) return;
+        message.pending = false;
+        message.failed = true;
+        this._e('chat_status', { message });
+      }, 5000);
+      return true;
+    }
     setReady(v) { this.net.send({ t: 'ready', v: !!v }); }
     start() { this.net.send({ t: 'start' }); }
     joinBattle() { this.net.send({ t: 'join_battle' }); }
