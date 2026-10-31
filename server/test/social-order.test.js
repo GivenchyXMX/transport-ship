@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { makeSocial } = require('../social');
+const { makeAuth } = require('../auth');
 
 test('所有玩家按实时在线状态全局排序后再分页', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-social-'));
@@ -76,6 +77,32 @@ test('好友私聊可读写，删除好友同时清空双方历史', () => {
     assert.deepEqual(social.privateHistory('a', 'b').messages, []);
   } finally {
     social?.close();
+    if (originalPath === undefined) delete process.env.AUTH_DB_PATH;
+    else process.env.AUTH_DB_PATH = originalPath;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('账号头像写入后版本递增，旧账号表可迁移', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-avatar-'));
+  const dbPath = path.join(dir, 'accounts.sqlite');
+  const originalPath = process.env.AUTH_DB_PATH;
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE accounts (id TEXT PRIMARY KEY,email TEXT,name TEXT,name_key TEXT,created_at INTEGER);
+    INSERT INTO accounts VALUES ('a','a@example.test','阿明','阿明',1);`);
+  db.close();
+  process.env.AUTH_DB_PATH = dbPath;
+  let auth;
+  try {
+    auth = makeAuth();
+    const image = Buffer.alloc(128);
+    image[0] = 0xff; image[1] = 0xd8;
+    assert.equal(auth.setAvatar('a', image, 'image/jpeg'), 1);
+    assert.equal(auth.avatar('a').version, 1);
+    assert.equal(auth.avatar('a').data.length, 128);
+    assert.throws(() => auth.setAvatar('a', Buffer.from('bad'), 'image/jpeg'), /头像格式无效/);
+  } finally {
+    auth?.close();
     if (originalPath === undefined) delete process.env.AUTH_DB_PATH;
     else process.env.AUTH_DB_PATH = originalPath;
     fs.rmSync(dir, { recursive: true, force: true });

@@ -38,6 +38,7 @@ function makeSocial() {
   const columns = db.prepare('PRAGMA table_info(accounts)').all().map((column) => column.name);
   if (!columns.includes('last_online_at')) db.exec('ALTER TABLE accounts ADD COLUMN last_online_at INTEGER');
   if (!columns.includes('last_seen_at')) db.exec('ALTER TABLE accounts ADD COLUMN last_seen_at INTEGER');
+  if (!columns.includes('avatar_version')) db.exec('ALTER TABLE accounts ADD COLUMN avatar_version INTEGER NOT NULL DEFAULT 0');
   const messageColumns = db.prepare('PRAGMA table_info(private_messages)').all().map((column) => column.name);
   if (!messageColumns.includes('read_at')) db.exec('ALTER TABLE private_messages ADD COLUMN read_at INTEGER');
 
@@ -48,7 +49,7 @@ function makeSocial() {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   }) : null;
   const pair = (a, b) => a < b ? [a, b] : [b, a];
-  function account(id) { return db.prepare('SELECT id,name,email,last_online_at,last_seen_at FROM accounts WHERE id=?').get(id); }
+  function account(id) { return db.prepare('SELECT id,name,email,last_online_at,last_seen_at,avatar_version FROM accounts WHERE id=?').get(id); }
   function isFriend(a, b) {
     const [low, high] = pair(a, b);
     return !!db.prepare('SELECT 1 FROM friendships WHERE account_low=? AND account_high=?').get(low, high);
@@ -61,7 +62,7 @@ function makeSocial() {
     return request ? (request.sender_id === a ? 'sent' : 'received') : 'none';
   }
   function publicAccount(row) {
-    return { accountId: row.id, name: row.name, email: row.email,
+    return { accountId: row.id, name: row.name, email: row.email, avatarVersion: row.avatar_version || 0,
       militaryRank: rankOf(row.xp_total).name,
       lastOnlineAt: row.last_online_at || null, lastSeenAt: row.last_seen_at || null };
   }
@@ -71,7 +72,7 @@ function makeSocial() {
     const size = Math.max(1, Math.min(50, Math.floor(Number(limit) || 30)));
     const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
     const online = JSON.stringify(onlineAccountIds);
-    const rows = db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,
+    const rows = db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,a.avatar_version,
       COALESCE(rp.xp_total,0) AS xp_total FROM accounts a
       LEFT JOIN rank_profiles rp ON rp.account_id=a.id
       WHERE a.id<>? AND a.name LIKE ? ESCAPE '\\'
@@ -82,7 +83,7 @@ function makeSocial() {
       nextCursor: rows.length > size ? offset + size : null };
   }
   function friends(me) {
-    return db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,
+    return db.prepare(`SELECT a.id,a.name,a.email,a.last_online_at,a.last_seen_at,a.avatar_version,
       COALESCE(rp.xp_total,0) AS xp_total FROM friendships f
       JOIN accounts a ON a.id=CASE WHEN f.account_low=? THEN f.account_high ELSE f.account_low END
       LEFT JOIN rank_profiles rp ON rp.account_id=a.id

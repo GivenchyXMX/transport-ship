@@ -37,11 +37,14 @@ function makeAuth() {
   const columns = db.prepare('PRAGMA table_info(accounts)').all().map((column) => column.name);
   if (!columns.includes('password_salt')) db.exec('ALTER TABLE accounts ADD COLUMN password_salt TEXT');
   if (!columns.includes('password_hash')) db.exec('ALTER TABLE accounts ADD COLUMN password_hash TEXT');
+  if (!columns.includes('avatar_data')) db.exec('ALTER TABLE accounts ADD COLUMN avatar_data BLOB');
+  if (!columns.includes('avatar_mime')) db.exec('ALTER TABLE accounts ADD COLUMN avatar_mime TEXT');
+  if (!columns.includes('avatar_version')) db.exec('ALTER TABLE accounts ADD COLUMN avatar_version INTEGER NOT NULL DEFAULT 0');
   try { fs.chmodSync(dbPath, 0o600); } catch (_) {}
 
   const getAccount = db.prepare('SELECT * FROM accounts WHERE email=?');
   const getCode = db.prepare('SELECT * FROM auth_codes WHERE email=?');
-  const getSession = db.prepare(`SELECT a.id, a.email, a.name FROM sessions s
+  const getSession = db.prepare(`SELECT a.id, a.email, a.name, a.avatar_version AS avatarVersion FROM sessions s
     JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>?`);
   const mailReady = !!(process.env.SMTP_HOST && process.env.SMTP_FROM && process.env.SMTP_USER && process.env.SMTP_PASS);
   const mailer = mailReady ? nodemailer.createTransport({
@@ -144,7 +147,7 @@ function makeAuth() {
       db.prepare('DELETE FROM auth_codes WHERE email=?').run(email);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
-    return { account, token: createSession(account) };
+    return { account: { ...account, avatarVersion: 0 }, token: createSession(account) };
   }
   async function login({ email: rawEmail, password }, ip) {
     const email = emailOf(rawEmail);
@@ -156,7 +159,7 @@ function makeAuth() {
       limit('login-email:' + email, 10);
       fail(401, '邮箱或密码错误');
     }
-    return { account: { id: account.id, email, name: account.name }, token: createSession(account) };
+    return { account: { id: account.id, email, name: account.name, avatarVersion: account.avatar_version || 0 }, token: createSession(account) };
   }
   async function forgotPassword({ email: rawEmail }, ip) {
     const email = emailOf(rawEmail);
@@ -188,7 +191,16 @@ function makeAuth() {
     return getSession.get(digest(token), Date.now()) || null;
   }
   function logout(token) { if (token) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(digest(token)); }
-  return { register, verifyRegister, login, forgotPassword, resetPassword, current, logout, mailReady, close: () => db.close() };
+  function avatar(id) { return db.prepare('SELECT avatar_data AS data,avatar_mime AS mime,avatar_version AS version FROM accounts WHERE id=?').get(id); }
+  function setAvatar(id, data, mime) {
+    if (!Buffer.isBuffer(data) || data.length < 100 || data.length > 100_000 ||
+        !((mime === 'image/jpeg' && data[0] === 0xff && data[1] === 0xd8) ||
+          (mime === 'image/png' && data.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')))))
+      fail(400, '头像格式无效或图片过大');
+    db.prepare('UPDATE accounts SET avatar_data=?,avatar_mime=?,avatar_version=avatar_version+1 WHERE id=?').run(data, mime, id);
+    return avatar(id).version;
+  }
+  return { register, verifyRegister, login, forgotPassword, resetPassword, current, logout, avatar, setAvatar, mailReady, close: () => db.close() };
 }
 
 module.exports = { makeAuth };

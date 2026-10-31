@@ -1,6 +1,7 @@
 server/node_modules/
 .runtime/
 deploy/config.env
+deploy/remote.local.sh
 .idea/
 .DS_Store
 .env

@@ -98,12 +98,12 @@ function localInviteOrigin(req) {
   if (!loopback || ![`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`].includes(host)) return '';
   return `http://${host}`;
 }
-async function readJson(req) {
+async function readJson(req, limit = 4096) {
   if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw Object.assign(new Error('只接受 JSON'), { status: 415 });
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 4096) throw Object.assign(new Error('请求过大'), { status: 413 });
+    if (raw.length > limit) throw Object.assign(new Error('请求过大'), { status: 413 });
   }
   try {
     const value = JSON.parse(raw);
@@ -121,6 +121,19 @@ async function handleAuth(req, res, rel) {
       return account ? json(res, 200, { account }) : json(res, 401, { error: '请先登录' });
     }
     if (req.method !== 'POST') return json(res, 405, { error: '方法不允许' });
+    if (rel === '/api/auth/avatar') {
+      const account = auth.current(tokenFromCookie(req, tabId));
+      if (!account) return json(res, 401, { error: '请先登录' });
+      const body = await readJson(req, 140_000);
+      if (typeof body.data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.data)) return json(res, 400, { error: '头像数据无效' });
+      const version = auth.setAvatar(account.id, Buffer.from(body.data, 'base64'), body.mime);
+      for (const player of clients.values()) if (player.ws.readyState === player.ws.OPEN)
+        send(player.ws, { t: 'avatar_changed', accountId: account.id, avatarVersion: version });
+      broadcastPresence();
+      for (const room of rooms.values()) if ([...room.players.values()].some((p) => p.accountId === account.id))
+        broadcast(room, { t: 'room', room: roomBrief(room) });
+      return json(res, 200, { avatarVersion: version });
+    }
     if (rel === '/api/auth/logout') {
       const token = tokenFromCookie(req, tabId);
       const account = auth.current(token);
@@ -337,7 +350,7 @@ function roomBrief(room) {
     state: room.state,
     host: room.host,
     players: [...room.players.values()].map((p) => ({
-      netId: p.netId, accountId: p.accountId, name: p.name, email: p.email, team: p.team, ready: p.ready,
+      netId: p.netId, accountId: p.accountId, name: p.name, email: p.email, avatarVersion: social.account(p.accountId)?.avatar_version || 0, team: p.team, ready: p.ready,
       pendingBattle: !!p.pendingBattle,
       rank: rank.getProfile(p.accountId).name,
     })),
@@ -346,7 +359,8 @@ function roomBrief(room) {
 
 function playerBrief(player) {
   return {
-    netId: player.netId, name: player.name, email: player.email, team: player.team,
+    netId: player.netId, accountId: player.accountId, name: player.name, email: player.email,
+    avatarVersion: social.account(player.accountId)?.avatar_version || 0, team: player.team,
     primary: player.primary || 'ak47', isBot: false,
     rank: rank.getProfile(player.accountId).name,
     stats: player.roundStats ? { ...player.roundStats } : null,
@@ -385,6 +399,7 @@ function broadcastPresence() {
       accountId: player.accountId,
       name: player.name,
       email: player.email,
+      avatarVersion: social.account(player.accountId)?.avatar_version || 0,
       roomId: player.room?.id || null,
       roomName: player.room?.name || null,
       status: !player.room ? 'online' : player.room.state === 'playing' && !player.pendingBattle ? 'battle' : 'room',
@@ -903,6 +918,14 @@ const server = http.createServer((req, res) => {
   if (rel === '/') rel = '/index.html';
 
   if (rel.startsWith('/api/auth/')) { void handleAuth(req, res, rel); return; }
+  if (rel.startsWith('/api/avatar/') && req.method === 'GET') {
+    const id = rel.slice('/api/avatar/'.length);
+    const row = /^[a-f0-9-]{36}$/.test(id) ? auth.avatar(id) : null;
+    if (!row?.data) { res.writeHead(404, { 'Cache-Control': 'no-store' }).end(); return; }
+    res.writeHead(200, { 'Content-Type': row.mime, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+    res.end(row.data);
+    return;
+  }
   if (rel.startsWith('/api/social/')) { void handleSocial(req, res, rel); return; }
   if (rel === '/api/leaderboard') {
     if (req.method !== 'GET') { json(res, 405, { error: '方法不允许' }); return; }

@@ -77,6 +77,11 @@
   .cfOnlineTitle{font-size:13px;font-weight:700;color:#f5b321;margin-bottom:10px}
   .cfOnlineList{overflow:visible}
   .cfOnlineEntry{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+  .cfAvatar{display:inline-flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.22);border-radius:8px;background:#394551;color:#fff;font-size:14px;font-weight:700}
+  .cfAvatar img{display:block;width:100%;height:100%;object-fit:cover}
+  .cfIdentityRow{display:flex;align-items:center;gap:7px;min-width:0}
+  .cfSlot .cfAvatar{width:28px;height:28px;border-radius:7px}
   .cfOnlineInfo{flex:1;min-width:0}
   .cfOnlineName{font-size:13px;line-height:1.45;overflow-wrap:anywhere}
   .cfOnlineRank{margin-top:3px}
@@ -226,6 +231,13 @@
   .cfProfileLabel{font-size:12px;color:#999;margin-bottom:5px}
   .cfProfileValue{font-size:16px;font-weight:600;overflow-wrap:anywhere}
   .cfProfileIdentity{display:block;font-size:17px;font-weight:700;margin:0 0 16px;overflow-wrap:anywhere}
+  .cfAvatar.cfProfileAvatar{width:64px;height:64px;border-radius:12px;font-size:26px}
+  .cfProfileAvatarButton{position:relative;display:block;flex:none;width:66px;height:66px;padding:0;overflow:hidden;
+    border:0;border-radius:12px;background:transparent;cursor:pointer}
+  .cfProfileAvatarButton:hover{filter:brightness(1.1)}
+  .cfProfileAvatarButton:focus-visible{outline:2px solid #f5b321;outline-offset:2px}
+  .cfProfileAvatarHint{position:absolute;left:1px;right:1px;bottom:1px;height:22px;display:flex;align-items:center;
+    justify-content:center;background:rgba(255,255,255,.48);color:#20262d;font-size:10px;font-weight:600;pointer-events:none}
   .cfProfileIdentity .cfIdentityEmail{font-size:13px}
   @media(max-width:560px){.cfProfileGrid,.cfTeams{grid-template-columns:1fr}}
   `;
@@ -262,6 +274,19 @@
     }
     return identity;
   }
+  function avatarNode(name, accountId, version, cls = '') {
+    const avatar = el('span', 'cfAvatar' + (cls ? ' ' + cls : ''));
+    const fallback = [...String(name || '?')][0] || '?';
+    avatar.textContent = fallback;
+    if (accountId && version > 0) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = `/api/avatar/${encodeURIComponent(accountId)}?v=${version}`;
+      img.onerror = () => { img.remove(); avatar.textContent = fallback; };
+      avatar.replaceChildren(img);
+    }
+    return avatar;
+  }
 
   function renderOnlineList(panel, room, follow) {
     panel.innerHTML = '';
@@ -276,7 +301,7 @@
       const state = el('div', 'cfOnlineState');
       state.textContent = player.roomId ? (follow ? `在房间：${player.roomName || '未命名房间'}` : '在房间') : '空闲';
       info.append(name, state);
-      entry.appendChild(info);
+      entry.append(avatarNode(player.name, player.accountId, player.avatarVersion), info);
       if (follow && player.roomId && player.netId !== room.selfId && player.roomId !== room.room?.id) {
         const button = el('button', 'cf ghost cfOnlineFollow', '跟随');
         button.title = `尝试加入${player.name}所在的房间`;
@@ -568,9 +593,9 @@
           const line = el('div', 'cfPrivateLine' + (message.senderId === authUser?.id ? ' mine' : ''));
           const mine = message.senderId === authUser?.id;
           const senderName = mine ? authUser?.name || '我' : socialFriends.find((p) => p.accountId === privateTarget)?.name || '好友';
-          const avatar = el('span', 'cfPrivateAvatar');
+          const avatar = avatarNode(senderName, mine ? authUser?.id : privateTarget,
+            mine ? authUser?.avatarVersion : socialFriends.find((p) => p.accountId === privateTarget)?.avatarVersion, 'cfPrivateAvatar');
           avatar.setAttribute('aria-label', `${senderName}头像占位`);
-          avatar.textContent = senderName.slice(0, 1);
           const bubble = el('div', 'cfPrivateBubble');
           const stack = el('div', 'cfPrivateStack');
           const meta = el('span', 'cfPrivateMeta');
@@ -716,10 +741,7 @@
         panel.replaceChildren();
         if (authUser) {
           const account = el('div', 'cfAccountCard');
-          const avatar = el('div', 'cfAccountAvatar');
-          const icon = global.CFRankIcons?.icon(rankProfile?.profile?.name);
-          if (icon) avatar.appendChild(icon);
-          else avatar.textContent = authUser.name?.slice(0, 1) || '我';
+          const avatar = avatarNode(authUser.name, authUser.id, authUser.avatarVersion, 'cfAccountAvatar');
           const info = el('div', 'cfAccountInfo');
           info.appendChild(playerIdentity(authUser.name, authUser.email, 'cfOnlineName'));
           info.appendChild(el('div', 'cfAccountRank', rankProfile?.profile?.name || '个人账号'));
@@ -852,7 +874,7 @@
             actions.appendChild(invite);
           }
           info.appendChild(actions);
-          entry.appendChild(info);
+          entry.append(avatarNode(person.name, person.accountId, person.avatarVersion), info);
           list.appendChild(entry);
         }
         panel.appendChild(list);
@@ -974,7 +996,45 @@
         if (rankLoadError) body.appendChild(el('div', 'cfTip bad', esc(rankLoadError)));
         if (!rankProfile) { body.appendChild(el('div', 'cfEmpty', '正在加载个人信息…')); return; }
         const account = rankProfile.account || authUser;
-        body.appendChild(playerIdentity(account.name, account.email, 'cfProfileIdentity'));
+        const identity = el('div', 'cfIdentityRow');
+        const avatarButton = el('button', 'cfProfileAvatarButton');
+        avatarButton.type = 'button';
+        avatarButton.setAttribute('aria-label', '点击更换头像');
+        const avatarHint = el('span', 'cfProfileAvatarHint', '点击更换头像');
+        avatarButton.append(avatarNode(account.name, authUser?.id, authUser?.avatarVersion, 'cfProfileAvatar'), avatarHint);
+        identity.append(avatarButton, playerIdentity(account.name, account.email, 'cfProfileIdentity'));
+        body.appendChild(identity);
+        const upload = el('input');
+        upload.type = 'file';
+        upload.accept = 'image/png,image/jpeg,image/webp';
+        upload.hidden = true;
+        upload.setAttribute('aria-label', '上传头像');
+        avatarButton.onclick = () => upload.click();
+        upload.onchange = async () => {
+          const file = upload.files?.[0];
+          if (!file) return;
+          if (file.size > 5_000_000) { window.alert('请选择小于 5 MB 的图片'); return; }
+          avatarButton.disabled = true;
+          avatarHint.textContent = '上传中…';
+          try {
+            const image = new Image();
+            const url = URL.createObjectURL(file);
+            try { await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = url; }); }
+            finally { URL.revokeObjectURL(url); }
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const side = Math.min(image.width, image.height);
+            ctx.drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, 128, 128);
+            const data = canvas.toDataURL('image/jpeg', .82).split(',')[1];
+            const result = await authRequest('avatar', { mime: 'image/jpeg', data });
+            authUser.avatarVersion = result.avatarVersion;
+            render();
+            void loadSocial();
+          } catch (error) { window.alert(error.message || '头像上传失败'); }
+          finally { avatarButton.disabled = false; avatarHint.textContent = '点击更换头像'; upload.value = ''; }
+        };
+        body.appendChild(upload);
         const p = rankProfile.profile;
         const card = el('div', 'cfXpCard');
         const rankTitle = el('div', 'cfXpTitle');
@@ -1264,7 +1324,7 @@
             const p = slots[tk][i];
             const s = el('div', 'cfSlot' + (p ? (p.netId === room.selfId ? ' mine' : '') : ' empty'));
             if (p) {
-              s.appendChild(playerIdentity(p.name, p.email, 'cfSlotName'));
+              s.append(avatarNode(p.name, p.accountId, p.avatarVersion), playerIdentity(p.name, p.email, 'cfSlotName'));
               const tags = el('span', 'st');
               if (p.rank) tags.appendChild(rankMark(p.rank));
               if (p.netId === r.host) tags.appendChild(el('span', 'cfTag', '房主'));
@@ -1297,7 +1357,7 @@
           for (const p of unassigned) {
             const row = el('div', 'cfSlot');
             const name = playerIdentity(p.name, p.email, 'cfSlotName');
-            row.appendChild(name);
+            row.append(avatarNode(p.name, p.accountId, p.avatarVersion), name);
             if (p.rank) row.appendChild(rankMark(p.rank));
             const add = friendButton(p);
             if (add) row.appendChild(add);
@@ -1621,6 +1681,13 @@
         scheduleSocial();
       });
       room.net.on('social_changed', () => { void loadSocial(); });
+      room.net.on('avatar_changed', (event) => {
+        if (authUser?.id === event.accountId) authUser.avatarVersion = event.avatarVersion;
+        for (const person of room.online) if (person.accountId === event.accountId) person.avatarVersion = event.avatarVersion;
+        void loadSocial();
+        if (!root.classList.contains('hidden')) render();
+        if (privatePanel.classList.contains('open')) renderPrivateMessages();
+      });
       room.net.on('private_message', (event) => {
         if (!socialFriends.some((p) => p.accountId === event.otherId)) return;
         if (privatePanel.classList.contains('open') && privateTarget === event.otherId) {
