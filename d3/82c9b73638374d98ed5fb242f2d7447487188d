@@ -1,0 +1,71 @@
+server/test/social-order.test.js
+  s_9ec9b1065a12a0::t_2fa9da23af753e 10,85-105
+  s_66967b13f26c79::t_252770dfe9fb9c 106-110
+AGENTS.md
+  s_9ec9b1065a12a0::t_8c671ebcaa52ee 1-24
+web/ui.js
+  s_9ec9b1065a12a0::t_1a0d6d3b13ac67 1689
+  s_9ec9b1065a12a0::t_09813827ab9f8c 1684-1688,1690
+  s_9ec9b1065a12a0::t_496b47559cd880 1002-1003,1035
+  s_9ec9b1065a12a0::t_b67df6b6f1715d 596-597,744,877,1327,1360
+  s_9ec9b1065a12a0::t_5eb5938a92d13d 234
+  s_9ec9b1065a12a0::t_9bf2526eb5c7ba 235-239,1000-1001,1004-1005,1012,1017-1018,1037
+  s_9ec9b1065a12a0::t_ad6cbae804af52 240
+  s_9ec9b1065a12a0::t_0118ddf6bccfba 999,1006,1008-1009,1011,1013-1016,1019-1034,1036
+  s_9ec9b1065a12a0::t_ed94f4425525cf 1007,1010
+  s_9ec9b1065a12a0::t_c02ac5a6733384 80-84,277-289,304
+docs/玩家头像设计.md
+  s_9ec9b1065a12a0::t_5eb5938a92d13d 1-2,4-7
+  s_9ec9b1065a12a0::t_496b47559cd880 3
+deploy/remote.sh
+  s_66967b13f26c79::t_7b1df117df0738 5,27
+  s_66967b13f26c79::t_c9bf01d320edaa 6-14,26
+  s_66967b13f26c79::t_ff2fae6c1b0ae9 1-4,15-25,28,34
+  s_66967b13f26c79::t_c1197f9de430ce 29-33
+.gitignore
+  s_66967b13f26c79::t_c9bf01d320edaa 4
+server/social.js
+  s_9ec9b1065a12a0::t_3cd65f40f823b4 41
+  s_9ec9b1065a12a0::t_0bc8c89ea637ba 52,65,75,86
+server/server.js
+  s_9ec9b1065a12a0::t_09813827ab9f8c 132
+  s_9ec9b1065a12a0::t_0bc8c89ea637ba 353,362-363
+  s_9ec9b1065a12a0::t_a6e98b3f212051 101,106,124-131,133-136,921-928
+  s_9ec9b1065a12a0::t_c02ac5a6733384 402
+README.md
+  s_66967b13f26c79::t_d2cc8e3bfba3b7 11
+server/auth.js
+  s_9ec9b1065a12a0::t_4767749752cb8a 40-42,47,150,162,194-203
+docs/自行部署.md
+  s_66967b13f26c79::t_005bb2e5e9ddea 102
+  s_66967b13f26c79::t_d2cc8e3bfba3b7 85-92,94,103,105-107
+  s_66967b13f26c79::t_c9bf01d320edaa 93,95-101,104
+deploy/remote-activate.sh
+  s_66967b13f26c79::t_ff2fae6c1b0ae9 1-39,42-48,51-54,57
+  s_66967b13f26c79::t_d2cc8e3bfba3b7 40-41,49-50
+  s_66967b13f26c79::t_005bb2e5e9ddea 55-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d382c9b73638374d98ed5fb242f2d7447487188d",
+  "prompts": {},
+  "sessions": {
+    "s_66967b13f26c79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167af-6ab0-79d0-aa0e-d5f1fe6914bd",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    },
+    "s_9ec9b1065a12a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a192a6-2ce1-7d93-8aca-293f643336d5",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
