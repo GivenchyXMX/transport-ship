@@ -1,0 +1,25 @@
+README.md
+  h_c19cdd304bb9a6 5,8-9
+  s_5d587063c39099::t_7c73a3f151ff23 3,6,10-11,21-49,52,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2b7d79deae419480bfb42ddb12a80246db48b9b3",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_5d587063c39099": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a197dd-8707-71f2-ab8e-5d57a688868a",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
