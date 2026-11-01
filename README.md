@@ -3,10 +3,10 @@
 浏览器中的运输船团队竞技游戏。玩家通过邮箱注册、登录，创建或加入房间，选择潜伏者或保卫者对战。一个 Node.js 进程提供网页、账号接口和 WebSocket 联机服务；SQLite 保存账号、战绩和军衔数据。
 
 ## 联机房间
-![运输船房间界面](docs/images/inRoom.png)
+![运输船房间界面](docs/images/inRoom.jpg)
 
 ## 运输船内
-![运输船房间界面](docs/images/img.png)
+![运输船房间界面](docs/images/img.jpg)
 
 ## 本机运行
 
