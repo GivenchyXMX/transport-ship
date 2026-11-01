@@ -1,0 +1,42 @@
+.gitignore
+  s_2b169f8495d9db::t_577139e047fb0d 14
+.env.example
+  s_2b169f8495d9db::t_22c9b6970486c8 1-10
+CHANGELOG.md
+  s_2b169f8495d9db::t_34aba601ce4c7c 1-19
+.github/workflows/ci.yml
+  s_2b169f8495d9db::t_5d21221d770b47 1-40
+web/rank-icons.js
+  s_2b169f8495d9db::t_4d6edb8654ed0c 6-14
+README.md
+  h_c19cdd304bb9a6 13
+  s_2b169f8495d9db::t_0979df6d8893a8 14
+LICENSE
+  s_2b169f8495d9db::t_8386c2efe0b61c 3
+  s_2b169f8495d9db::t_187795d7326a51 1-2,4-21
+CONTRIBUTING.md
+  s_2b169f8495d9db::t_dadb7746ccc83a 1-53
+server/server.js
+  s_2b169f8495d9db::t_2382da7f99ce25 978
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d968c61acdccba0e2ee0c20f3f0914dca0bb8c64",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_2b169f8495d9db": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_e6837a3a9ffeZU74nS49kQg5FB",
+        "model": "qwen3.7-max"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
