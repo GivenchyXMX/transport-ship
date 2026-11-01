@@ -1,0 +1,19 @@
+server/server.js
+  s_2b169f8495d9db::t_2382da7f99ce25 978
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d76452124b358f25e274d97f86acf885cc24742",
+  "prompts": {},
+  "sessions": {
+    "s_2b169f8495d9db": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_e6837a3a9ffeZU74nS49kQg5FB",
+        "model": "qwen3.7-max"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
