@@ -1,0 +1,33 @@
+server/auth.js
+  s_a2087b2eade3f4::t_6098397710c237 18-21,67-70,132,147,213
+docs/自行部署.md
+  s_a2087b2eade3f4::t_6098397710c237 50,63,69
+  s_a2087b2eade3f4::t_0ab13a6c29aed7 70
+server/package.json
+  s_a2087b2eade3f4::t_5453df88bcab2d 13
+deploy/config.env.example
+  s_a2087b2eade3f4::t_6098397710c237 12-13
+server/server.js
+  s_a2087b2eade3f4::t_6098397710c237 119-120
+web/ui.js
+  s_a2087b2eade3f4::t_5b11cb5dbc52cf 41-43,491,1139-1149,1181,1193,1210,1747-1748
+server/test/register-email-suffix.test.js
+  s_a2087b2eade3f4::t_ced6d67d7333c1 8-9,30-37
+  s_a2087b2eade3f4::t_5453df88bcab2d 1-7,10-29,38-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "572c57c58360d79cb3585221c4410f4239b9bef7",
+  "prompts": {},
+  "sessions": {
+    "s_a2087b2eade3f4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a197f2-add1-7960-9709-b0b29044e238",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
