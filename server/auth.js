@@ -15,6 +15,10 @@ const NAME_RE = /[\p{White_Space}\u200B-\u200D\uFEFF]/u;
 const attempts = new Map();
 
 function makeAuth() {
+  const registerEmailSuffix = (process.env.REGISTER_EMAIL_SUFFIX || '').trim().toLowerCase();
+  if (registerEmailSuffix && (!/^@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(registerEmailSuffix) ||
+    registerEmailSuffix.split('.').some((part) => part.endsWith('-') || part.startsWith('-'))))
+    throw new Error('REGISTER_EMAIL_SUFFIX 必须是 @example.com 格式的邮箱域名');
   const dbPath = process.env.AUTH_DB_PATH || path.resolve(__dirname, '../.runtime/accounts.sqlite');
   fs.mkdirSync(path.dirname(dbPath), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
@@ -59,6 +63,10 @@ function makeAuth() {
     const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
     if (email.length > 254 || !EMAIL_RE.test(email)) fail(400, '邮箱格式不正确');
     return email;
+  }
+  function checkRegisterEmail(email) {
+    if (registerEmailSuffix && email.slice(email.lastIndexOf('@')) !== registerEmailSuffix)
+      fail(400, `注册邮箱必须以 ${registerEmailSuffix} 结尾`);
   }
   function nameKey(name) {
     if (typeof name !== 'string' || [...name].length < 1 || [...name].length > 12 || NAME_RE.test(name))
@@ -121,6 +129,7 @@ function makeAuth() {
 
   async function register({ email: rawEmail, name, password }, ip) {
     const email = emailOf(rawEmail);
+    checkRegisterEmail(email);
     validPassword(password);
     const key = nameKey(name);
     limit('register-ip:' + ip, 10);
@@ -135,6 +144,7 @@ function makeAuth() {
   }
   function verifyRegister({ email: rawEmail, code }, ip) {
     const email = emailOf(rawEmail);
+    checkRegisterEmail(email);
     limit('register-verify-ip:' + ip, 15);
     const pending = checkCode(email, code, 'register');
     if (getAccount.get(email)) fail(409, '邮箱已注册');
@@ -200,7 +210,7 @@ function makeAuth() {
     db.prepare('UPDATE accounts SET avatar_data=?,avatar_mime=?,avatar_version=avatar_version+1 WHERE id=?').run(data, mime, id);
     return avatar(id).version;
   }
-  return { register, verifyRegister, login, forgotPassword, resetPassword, current, logout, avatar, setAvatar, mailReady, close: () => db.close() };
+  return { register, verifyRegister, login, forgotPassword, resetPassword, current, logout, avatar, setAvatar, mailReady, registerEmailSuffix, close: () => db.close() };
 }
 
 module.exports = { makeAuth };

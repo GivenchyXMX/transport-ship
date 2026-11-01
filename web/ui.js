@@ -38,6 +38,9 @@
   .cfMainNav button.cf{padding:8px 15px;white-space:nowrap}
   .cfMainNav button.cf.active{background:rgba(245,179,33,.14);border-color:rgba(245,179,33,.5);color:#f5c76d}
   .cfBody{padding:18px 20px;min-width:0;min-height:0;overflow-y:auto;scrollbar-gutter:stable;flex:1}
+  .cfEmailFixed{display:flex;align-items:center;min-width:0;border:1px solid rgba(255,255,255,.22);border-radius:7px;overflow:hidden;background:rgba(0,0,0,.2)}
+  .cfEmailFixed input.cf{min-width:90px;flex:1;border:0;border-radius:0;background:transparent;box-shadow:none}
+  .cfEmailFixed span{padding:0 10px 0 2px;white-space:nowrap;color:#f5c76d;font-size:13px}
   .cfBody.cfRoomBody{display:flex;flex-direction:column;overflow:hidden;padding:10px 16px 12px}
   .cfRoomContent{flex:1;min-height:0;overflow-y:auto;scrollbar-gutter:stable}
   .cfRoomContent .cfRoomIntro{margin-bottom:8px}.cfRoomContent .cfMapPoster{width:160px}
@@ -485,6 +488,7 @@
       let authChecking = false;
       let authMode = 'login';
       let authEmail = '';
+      let registerEmailSuffix = '';
       let authNotice = '';
       let registrationSent = false;
       let leaderboardOpen = false;
@@ -1132,8 +1136,17 @@
         };
         body.appendChild(el('div', 'cfTip', descriptions[mode]));
         const row = el('div', 'cfRow');
-        const email = el('input', 'cf'); email.type = 'email'; email.placeholder = '邮箱'; email.autocomplete = 'email'; email.value = authEmail;
-        row.appendChild(email);
+        const fixedSuffix = mode === 'register' && !!registerEmailSuffix;
+        const email = el('input', 'cf'); email.type = fixedSuffix ? 'text' : 'email';
+        email.placeholder = fixedSuffix ? '邮箱前缀' : '邮箱'; email.autocomplete = 'email';
+        email.value = fixedSuffix ? (authEmail.toLowerCase().endsWith(registerEmailSuffix)
+          ? authEmail.slice(0, -registerEmailSuffix.length) : '') : authEmail;
+        if (fixedSuffix) {
+          const wrapper = el('div', 'cfEmailFixed');
+          wrapper.append(email, el('span', null, registerEmailSuffix));
+          row.appendChild(wrapper);
+        } else row.appendChild(email);
+        const emailValue = () => fixedSuffix ? email.value.trim() + registerEmailSuffix : email.value.trim();
         let name, password, code;
         if (mode === 'register') {
           name = el('input', 'cf'); name.placeholder = '游戏昵称'; name.maxLength = 12;
@@ -1165,7 +1178,7 @@
         const links = el('div', 'cfRow');
         const switchMode = (next, label) => {
           const button = el('button', 'cf ghost', label);
-          button.onclick = () => { authEmail = email.value.trim(); authMode = next; authNotice = ''; registrationSent = false; render(); };
+          button.onclick = () => { authEmail = emailValue(); authMode = next; authNotice = ''; registrationSent = false; render(); };
           links.appendChild(button);
         };
         if (mode === 'login') { switchMode('register', '注册账号'); switchMode('forgot', '忘记密码'); }
@@ -1177,7 +1190,7 @@
         body.appendChild(links);
         if (sendButton) sendButton.onclick = async () => {
           sendButton.disabled = true;
-          authEmail = email.value.trim();
+          authEmail = emailValue();
           status.textContent = '正在发送验证码…';
           try {
             await authRequest('register', { email: authEmail, name: name.value, password: password.value });
@@ -1194,7 +1207,7 @@
         };
         btn.onclick = async () => {
           btn.disabled = true;
-          authEmail = email.value.trim();
+          authEmail = emailValue();
           status.textContent = '请稍候…';
           try {
             if (mode === 'register') {
@@ -1731,6 +1744,8 @@
           root.classList.remove('hidden');
           authChecking = true;
           render();
+          try { registerEmailSuffix = (await authRequest('config')).registerEmailSuffix || ''; }
+          catch (_) { registerEmailSuffix = ''; }
           try {
             const data = await authRequest('me');
             if (root.classList.contains('hidden')) return;

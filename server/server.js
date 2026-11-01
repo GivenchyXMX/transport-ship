@@ -116,6 +116,8 @@ async function handleAuth(req, res, rel) {
   const tabId = tabIdFromHeader(req);
   if (!tabId) return json(res, 400, { error: '缺少有效的标签页标识，请刷新页面' });
   try {
+    if (rel === '/api/auth/config' && req.method === 'GET')
+      return json(res, 200, { registerEmailSuffix: auth.registerEmailSuffix });
     if (rel === '/api/auth/me' && req.method === 'GET') {
       const account = auth.current(tokenFromCookie(req, tabId));
       return account ? json(res, 200, { account }) : json(res, 401, { error: '请先登录' });
