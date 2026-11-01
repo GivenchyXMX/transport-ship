@@ -1,0 +1,24 @@
+deploy/common.sh
+  s_66967b13f26c79::t_4937c8f09a96f2 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "331a085c88500f2462144a9336e193c1507ef557",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_66967b13f26c79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167af-6ab0-79d0-aa0e-d5f1fe6914bd",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
