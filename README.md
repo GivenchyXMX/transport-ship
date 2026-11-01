@@ -1,18 +1,14 @@
 # 运输船 · 联机对战
 
-浏览器中的运输船团队竞技游戏。玩家使用邮箱注册和登录，创建或加入房间，选择潜伏者或保卫者进行对战。项目自带 Node.js 网页和 WebSocket 服务，以及 SQLite 账号、战绩和军衔数据存储。
+浏览器中的运输船团队竞技游戏。玩家通过邮箱注册、登录，创建或加入房间，选择潜伏者或保卫者对战。一个 Node.js 进程提供网页、账号接口和 WebSocket 联机服务；SQLite 保存账号、战绩和军衔数据。
 
-## 从这里开始
+## 联机房间
+![运输船房间界面](docs/images/inRoom.png)
 
-| 你想做什么 | 阅读 |
-|---|---|
-| 了解规则、操作、房间和排行榜 | [游戏玩法](docs/游戏玩法.md) |
-| 在自己的 Linux 服务器上部署、配置邮箱与 HTTPS | [自行部署](docs/自行部署.md) |
-| 将本地当前版本更新到现有服务器 | [远程一键部署](docs/自行部署.md#从本地一条命令部署到现有服务器) |
-| 了解军衔经验的计算和结算限制 | [军衔与经验系统设计](docs/军衔与经验系统设计.md) |
-![img_2.png](docs/images/inRoom.png)
-![img_1.png](docs/images/img_1.png)
-## 本机快速启动
+## 运输船内
+![运输船房间界面](docs/images/img.png)
+
+## 本机运行
 
 需要 **Node.js 24 或更新版本**。在项目根目录执行：
 
@@ -22,44 +18,37 @@ npm ci
 npm start
 ```
 
-打开 [http://localhost:8787/transport-ship-mp.html](http://localhost:8787/transport-ship-mp.html)。macOS 也可双击 `启动联机.command`，Windows 可双击 `start-windows.bat`；这两个启动器在终端中运行，关闭窗口即停止服务。
+然后打开 [http://localhost:8787/transport-ship-mp.html](http://localhost:8787/transport-ship-mp.html)。macOS 可双击 `启动联机.command`，Windows 可双击 `start-windows.bat`；关闭启动器窗口即停止服务。
 
-上述命令可启动服务，但**新用户注册和找回密码依赖 SMTP 邮件服务**。本机首次体验也要先配置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`。手动执行 `npm start` 和 Windows 启动器读取当前进程环境变量；`.env.example` 仅是变量模板，程序不会自动加载 `.env`。macOS 启动器和 Linux 部署脚本读取 `deploy/config.env`。具体配置见[自行部署](docs/自行部署.md#配置邮箱注册与找回密码)。已有账号登录不需要重新发送邮件。
+**首次注册前必须配置 SMTP 邮件服务。** 注册验证码、找回密码和离线好友邀请都需要发信账号。手动运行 `npm start` 或使用 Windows 启动器时，在启动进程的环境中设置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`；[`.env.example`](.env.example) 是变量模板，程序不会自动读取 `.env`。macOS 启动器和 Linux 部署脚本读取 `deploy/config.env`。具体示例见[邮箱配置](docs/自行部署.md#配置邮箱注册与找回密码)。没有 SMTP 时，已有账号仍可登录，但新用户无法注册。
 
-两名玩家分别登录后，一人创建房间，另一人加入。两个阵营各有至少一名真人玩家时，房主即可开始；联机房间不支持补位 bot。
+联机开局至少需要两名玩家分别登录，并且两个阵营各有一名真人玩家。单机模式支持 bot；联机房间不使用 bot 补位。
 
-## 当前能力与边界
+## 部署到服务器
 
-- 房间可选 4v4、5v5、6v6、8v8 和目标分数；支持邀请空闲玩家、跟随在线玩家入房、进行中选阵营加入。
-- 真人射击、刀和手雷的伤害由服务端计算；客户端仍上报位置和视角。联机房间不生成 bot；单机模式仍支持 bot。
-- 历史累计、月、周、日和实时排行榜统计服务端认可的真人战绩；个人信息展示军衔经验、累计战绩和对局时长。
-- 房间、在线状态和正在进行的比赛只存在于单个服务进程的内存中。重启会清空这些状态；账号、历史战绩和已完成结算保存在 SQLite。当前不支持把多个服务实例直接放到负载均衡器后共享房间。
+单台 Linux 服务器可用 `./deploy/install.sh` 安装依赖并生成游戏脚本，再配置 `deploy/config.env`，用 `./deploy/start.sh` 启动。对公网提供登录服务时，请配置 HTTPS 反向代理和 `PUBLIC_ORIGIN`。完整步骤、更新、备份和排障见[自行部署](docs/自行部署.md)。
 
-## 项目目录
+房间、在线状态和进行中的比赛保存在**单个服务进程的内存**中，重启后会清空；账号、历史战绩及已完成结算保存在 SQLite。当前不能直接部署多个服务实例来共享房间。
 
-```text
-transport-ship/
-├── index.html                  首页
-├── transport-ship-mp.html      游戏页面
-├── web/                        联机页面、同步逻辑与测试台
-├── src/vendor/                 第三方后处理代码
-├── src/client/core/            渲染、碰撞寻路和主循环
-├── src/client/maps/            地图注册表和运输船地图包
-├── src/client/actors/          玩家、士兵模型和 bot
-├── src/client/combat/          武器与射击表现
-├── src/client/graphics/        场景特效
-├── src/client/audio/           音频合成
-├── src/client/ui/              HUD、雷达和触控
-├── src/client/multiplayer/     联机钩子接口
-├── shared/maps/                两端共用的地图配置
-├── scripts/build-game.cjs      生成 web/game.js
-├── server/                     HTTP、WebSocket、账号和战绩服务
-├── deploy/                     Linux 安装、启动、停止与配置示例
-├── docs/                       玩法、部署和军衔说明
-├── 启动联机.command             macOS 本机启动器
-└── start-windows.bat           Windows 本机启动器
+## 功能与文档
+
+- 支持 4v4、5v5、6v6、8v8 房间，以及邀请、好友私聊、中途加入和排行榜；操作与规则见[游戏玩法](docs/游戏玩法.md)。
+- 真人伤害由服务端计算，客户端上报位置和视角；经验计算见[军衔与经验系统设计](docs/军衔与经验系统设计.md)。
+- 维护现有服务器可参考[远程部署](docs/自行部署.md#从本地一条命令部署到现有服务器)。
+- 参与开发请阅读[贡献指南](CONTRIBUTING.md)和[项目开发约定](AGENTS.md)；安全问题见[安全报告方式](SECURITY.md)。
+
+## 开发与验证
+
+`src/client/` 是游戏源码，`shared/maps/` 存放两端共用的地图配置；`scripts/build-game.cjs` 将它们生成到被 Git 忽略的 `web/game.js`。`web/` 是页面与联机界面，`server/` 是 HTTP、WebSocket 和 SQLite 服务，`deploy/` 是部署脚本。
+
+在 `server/` 目录执行：
+
+```bash
+npm run build:game  # 修改客户端或地图后生成 web/game.js
+npm run check:game  # 检查产物与源码一致
+npm run test:data   # 运行数据和游戏逻辑测试
 ```
 
-开发调试可访问 `/web/testbed.html`，健康检查可访问 `/health`。服务默认监听 `0.0.0.0:8787`，正式对外提供邮箱登录时请按[自行部署](docs/自行部署.md)配置 HTTPS。运行数据默认写入 `.runtime/`，其中的数据库和邮件配置应由部署者妥善保管。
+`npm start` 和本机启动器会自动构建游戏脚本；直接执行 `node server.js` 前需自行构建。运行中的服务提供 `/health` 健康检查和 `/web/testbed.html` 开发测试台。
 
-修改 `src/client/` 或 `shared/maps/` 后，在 `server/` 目录运行 `npm run build:game` 重新生成 `web/game.js`；`npm start`、本机启动器和 Linux 安装脚本也会自动构建。直接运行 `node server.js` 前必须先构建。数据层回归可运行 `npm run test:data`，产物一致性可运行 `npm run check:game`。拆分状态见[多地图扩展与功能拆分技术方案](docs/多地图扩展与功能拆分技术方案.md)，人工验收步骤见[架构拆分黑盒测试清单](docs/架构拆分黑盒测试清单.md)。公开发布前请核对[素材授权清单](docs/素材授权清单.md)。
+代码采用 [MIT 许可证](LICENSE)。仓库中的音乐、地图截图、军衔图片和第三方代码仍需分别核实再分发权利，见[素材授权清单](docs/素材授权清单.md)；在核实前，不应将项目视为已具备完整的公开分发授权。
