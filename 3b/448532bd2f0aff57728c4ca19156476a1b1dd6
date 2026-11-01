@@ -1,0 +1,20 @@
+README.md
+  s_2b169f8495d9db::t_41b04c021ba4fd 9
+  s_2b169f8495d9db::t_4ab35bef86bc7a 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b448532bd2f0aff57728c4ca19156476a1b1dd6",
+  "prompts": {},
+  "sessions": {
+    "s_2b169f8495d9db": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_e6837a3a9ffeZU74nS49kQg5FB",
+        "model": "qwen3.7-max"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
