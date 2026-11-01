@@ -1,0 +1,43 @@
+deploy/install.sh
+  s_5d587063c39099::t_3fcba516cd00d4 84-85
+.github/workflows/ci.yml
+  s_5d587063c39099::t_115b5b36196463 41-53
+server/package.json
+  s_5d587063c39099::t_3fcba516cd00d4 13
+SECURITY.md
+  s_5d587063c39099::t_115b5b36196463 1-5
+deploy/start.sh
+  s_5d587063c39099::t_3fcba516cd00d4 8-11
+docs/自行部署.md
+  s_5d587063c39099::t_342b0de132af29 24
+web/assets/maps/SOURCES.md
+  s_5d587063c39099::t_115b5b36196463 3
+deploy/remote-activate.sh
+  s_5d587063c39099::t_3fcba516cd00d4 10
+启动联机.command
+  s_5d587063c39099::t_3fcba516cd00d4 67
+docs/素材授权清单.md
+  s_5d587063c39099::t_115b5b36196463 1-12
+start-windows.bat
+  s_5d587063c39099::t_3fcba516cd00d4 23-29
+README.md
+  s_5d587063c39099::t_342b0de132af29 27,65
+.env.example
+  s_5d587063c39099::t_115b5b36196463 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fe3e60945507a57b9f2f07ba3193b4994f4ceff7",
+  "prompts": {},
+  "sessions": {
+    "s_5d587063c39099": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a197dd-8707-71f2-ab8e-5d57a688868a",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
