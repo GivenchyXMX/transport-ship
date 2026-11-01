@@ -20,6 +20,13 @@ if not exist "node_modules\nodemailer" (
   call npm ci --no-audit --no-fund
 )
 
+node ..\scripts\build-game.cjs
+if errorlevel 1 (
+  echo [ERROR] Game build failed.
+  pause
+  exit /b 1
+)
+
 echo.
 echo   Server starting. Keep this window OPEN while playing.
 echo   --------------------------------------------------------

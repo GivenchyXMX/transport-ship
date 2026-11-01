@@ -24,7 +24,7 @@ npm start
 
 打开 [http://localhost:8787/transport-ship-mp.html](http://localhost:8787/transport-ship-mp.html)。macOS 也可双击 `启动联机.command`，Windows 可双击 `start-windows.bat`；这两个启动器在终端中运行，关闭窗口即停止服务。
 
-游戏页面打开后需要先登录。**注册和找回密码依赖 SMTP 邮件服务**：本机体验前也要配置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`。macOS 启动器和 `deploy/start.sh` 会读取 `deploy/config.env`；Windows 启动器和手动执行的 `npm start` 使用进程环境变量。配置步骤见[自行部署](docs/自行部署.md#配置邮箱注册与找回密码)。已有账号登录不需要重新发送邮件。
+上述命令可启动服务，但**新用户注册和找回密码依赖 SMTP 邮件服务**。本机首次体验也要先配置 `SMTP_HOST`、`SMTP_PORT`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`。手动执行 `npm start` 和 Windows 启动器读取当前进程环境变量；`.env.example` 仅是变量模板，程序不会自动加载 `.env`。macOS 启动器和 Linux 部署脚本读取 `deploy/config.env`。具体配置见[自行部署](docs/自行部署.md#配置邮箱注册与找回密码)。已有账号登录不需要重新发送邮件。
 
 两名玩家分别登录后，一人创建房间，另一人加入。两个阵营各有至少一名真人玩家时，房主即可开始；联机房间不支持补位 bot。
 
@@ -62,4 +62,4 @@ transport-ship/
 
 开发调试可访问 `/web/testbed.html`，健康检查可访问 `/health`。服务默认监听 `0.0.0.0:8787`，正式对外提供邮箱登录时请按[自行部署](docs/自行部署.md)配置 HTTPS。运行数据默认写入 `.runtime/`，其中的数据库和邮件配置应由部署者妥善保管。
 
-修改 `src/client/` 或 `shared/maps/` 后，在 `server/` 目录运行 `npm run build:game` 重新生成 `web/game.js`；`npm start` 会自动执行这一步。直接运行 `node server.js` 或使用系统启动器时，读取仓库中已有的 `web/game.js`。数据层回归可运行 `npm run test:data`，产物一致性可运行 `npm run check:game`。拆分状态见[多地图扩展与功能拆分技术方案](docs/多地图扩展与功能拆分技术方案.md)，人工验收步骤见[架构拆分黑盒测试清单](docs/架构拆分黑盒测试清单.md)。
+修改 `src/client/` 或 `shared/maps/` 后，在 `server/` 目录运行 `npm run build:game` 重新生成 `web/game.js`；`npm start`、本机启动器和 Linux 安装脚本也会自动构建。直接运行 `node server.js` 前必须先构建。数据层回归可运行 `npm run test:data`，产物一致性可运行 `npm run check:game`。拆分状态见[多地图扩展与功能拆分技术方案](docs/多地图扩展与功能拆分技术方案.md)，人工验收步骤见[架构拆分黑盒测试清单](docs/架构拆分黑盒测试清单.md)。公开发布前请核对[素材授权清单](docs/素材授权清单.md)。

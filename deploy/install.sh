@@ -81,5 +81,7 @@ export PATH="$(dirname -- "$NODE_BIN"):$PATH"
 command -v npm >/dev/null 2>&1 || { echo "Node.js 已找到，但缺少 npm" >&2; exit 1; }
 echo "正在安装项目依赖…"
 (cd "$ROOT_DIR/server" && npm ci --omit=dev --no-audit --no-fund)
+"$NODE_BIN" "$ROOT_DIR/scripts/build-game.cjs"
+"$NODE_BIN" "$ROOT_DIR/scripts/build-game.cjs" --check
 echo "安装完成：$("$NODE_BIN" --version)，依赖位于 server/node_modules。"
 echo "运行 ./deploy/start.sh 启动服务。"

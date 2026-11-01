@@ -7,6 +7,7 @@ stage="${2:?缺少临时目录}"
   echo "线上目录或上传文件不完整" >&2; exit 1;
 }
 cd "$root"
+node "$stage/scripts/build-game.cjs"
 node "$stage/scripts/build-game.cjs" --check
 node --check "$stage/server/server.js"
 [[ ! -e "$stage/deploy/config.env" && ! -e "$stage/.runtime" ]] || {

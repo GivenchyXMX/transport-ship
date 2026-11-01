@@ -5,6 +5,10 @@ load_config
 require_node
 [[ -d "$ROOT_DIR/server/node_modules/ws" ]] || { echo "依赖未安装，请先运行 ./deploy/install.sh" >&2; exit 1; }
 [[ -d "$ROOT_DIR/server/node_modules/nodemailer" ]] || { echo "邮件依赖未安装，请先运行 ./deploy/install.sh" >&2; exit 1; }
+"$NODE_BIN" "$ROOT_DIR/scripts/build-game.cjs" --check || {
+  echo "游戏脚本缺失或与源码不一致，请先运行 ./deploy/install.sh" >&2
+  exit 1
+}
 mkdir -p "$STATE_DIR"
 
 if [[ -f "$PID_FILE" ]]; then

@@ -38,3 +38,16 @@ jobs:
       - name: Run data tests
         working-directory: server
         run: npm run test:data
+
+      - name: Smoke test HTTP pages
+        working-directory: server
+        run: |
+          node server.js > /tmp/transport-ship-ci.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8787/health > /dev/null; then break; fi
+            sleep 0.5
+          done
+          curl --fail --silent http://127.0.0.1:8787/web/game.js -o /tmp/transport-ship-game.js
+          test -s /tmp/transport-ship-game.js

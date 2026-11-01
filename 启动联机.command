@@ -64,6 +64,7 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 # --- 起服务（前台）---
+"$NODE" scripts/build-game.cjs || exit 1
 echo ""
 echo "  服务器已启动，窗口保持开着 = 服务在运行"
 echo "  --------------------------------------------------------"
