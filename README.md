@@ -10,8 +10,8 @@
 | 在自己的 Linux 服务器上部署、配置邮箱与 HTTPS | [自行部署](docs/自行部署.md) |
 | 将本地当前版本更新到现有服务器 | [远程一键部署](docs/自行部署.md#从本地一条命令部署到现有服务器) |
 | 了解军衔经验的计算和结算限制 | [军衔与经验系统设计](docs/军衔与经验系统设计.md) |
-![img_2.png](img_2.png)
-![img_1.png](img_1.png)
+![img_2.png](docs/images/inRoom.png)
+![img_1.png](docs/images/img_1.png)
 ## 本机快速启动
 
 需要 **Node.js 24 或更新版本**。在项目根目录执行：

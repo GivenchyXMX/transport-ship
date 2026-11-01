@@ -11,3 +11,4 @@ deploy/remote.local.sh
 *.sqlite-*
 *.db
 *.log
+web/game.js

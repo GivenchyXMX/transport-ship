@@ -975,7 +975,7 @@ const server = http.createServer((req, res) => {
   }
 
   // 远程部署时绝不能把 server/、依赖、日志或配置文件作为静态文件公开。
-  const rankIconFile = /^\/web\/assets\/ranks\/source\/[0-9]{3}_[\p{Script=Han}0-9]+\.jpg$/u.test(rel);
+  const rankIconFile = /^\/web\/assets\/ranks\/source\/[0-9]{3}_[a-z0-9_]+\.jpg$/.test(rel);
   if (!PUBLIC_FILES.has(rel) && !rankIconFile) { res.writeHead(404, { 'Cache-Control': 'no-store' }).end('404'); return; }
   const filePath = path.join(ROOT_DIR, rel.slice(1));
 

@@ -3,15 +3,15 @@
   'use strict';
 
   const files = Object.freeze({
-    '列兵': '001_列兵1.jpg', '二等兵': '004_二等兵.jpg',
-    '一等兵': '005_一等兵.jpg', '上等兵': '006_上等兵1.jpg',
-    '下士': '010_下士1.jpg', '中士': '016_中士1.jpg',
-    '上士': '022_上士1.jpg', '少尉': '028_少尉1.jpg',
-    '中尉': '036_中尉1.jpg', '上尉': '044_上尉1.jpg',
-    '少校': '052_少校1.jpg', '中校': '060_中校1.jpg',
-    '上校': '068_上校1.jpg', '大校': '076_大校1.jpg',
-    '少将': '082_少将1.jpg', '中将': '088_中将1.jpg',
-    '上将': '094_上将1.jpg', '元帅': '100_元帅.jpg',
+    '列兵': '001_private_1.jpg', '二等兵': '004_private_2c.jpg',
+    '一等兵': '005_private_1c.jpg', '上等兵': '006_lance_corporal_1.jpg',
+    '下士': '010_corporal_1.jpg', '中士': '016_sergeant_1.jpg',
+    '上士': '022_staff_sergeant_1.jpg', '少尉': '028_second_lieutenant_1.jpg',
+    '中尉': '036_first_lieutenant_1.jpg', '上尉': '044_captain_1.jpg',
+    '少校': '052_major_1.jpg', '中校': '060_lieutenant_colonel_1.jpg',
+    '上校': '068_colonel_1.jpg', '大校': '076_senior_colonel_1.jpg',
+    '少将': '082_major_general_1.jpg', '中将': '088_lieutenant_general_1.jpg',
+    '上将': '094_general_1.jpg', '元帅': '100_marshal.jpg',
   });
 
   function icon(name, className = 'cfRankIcon') {
