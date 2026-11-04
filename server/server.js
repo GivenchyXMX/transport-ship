@@ -41,12 +41,14 @@ const PROTECT_MS = 3000;               // 复活保护，和游戏内 spawn() �
 const MATCH_MS   = 600 * 1000;         // 单局时长，和游戏内 timeLeft=600 一致
 const MIN_JOIN_MS = 5000;              // 剩余时间太短时不再接受中途加入
 const INVITE_MS = 30000;               // 邀请 30 秒后自动失效
+const ROOM_LINK_MINUTES = Number(process.env.ROOM_INVITE_TTL_MINUTES || 30);
+if (!Number.isInteger(ROOM_LINK_MINUTES) || ROOM_LINK_MINUTES < 1 || ROOM_LINK_MINUTES > 1440) throw new Error('ROOM_INVITE_TTL_MINUTES 必须是 1–1440 的整数');
 const TEAMS      = ['BL', 'GR'];       // BL=潜伏者  GR=保卫者
 const TEAM_NAME  = { BL: '潜伏者', GR: '保卫者' };
 const WEAPONS    = new Set(['ak47', 'm4a1', 'awm', 'mp5', 'deagle', 'knife', 'he']);
 const ROOT_DIR   = path.resolve(__dirname, '..');
 const PUBLIC_FILES = new Set([
-  '/index.html', '/transport-ship-mp.html', '/invite.html', '/web/testbed.html',
+  '/index.html', '/transport-ship-mp.html', '/invite.html', '/room-invite.html', '/web/testbed.html',
   '/web/game.css', '/web/game.js',
   '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
   '/web/assets/forge.min.js',
@@ -276,6 +278,7 @@ async function handleSocial(req, res, rel) {
 /** @type {Map<string, Room>} */
 const rooms = new Map();
 const pendingInvites = new Map();       // 被邀请者 netId -> 尚未处理的邀请
+const roomLinks = new Map();            // 令牌摘要 -> 房间实例与过期时间
 let roomSeq = 0;
 let playerSeq = 0;
 
@@ -361,6 +364,48 @@ function roomBrief(room) {
       rank: rank.getProfile(p.accountId).name,
     })),
   };
+}
+
+function roomLinkInfo(token) {
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return null;
+  const key = crypto.createHash('sha256').update(token).digest('hex');
+  const link = roomLinks.get(key);
+  if (!link) return null;
+  if (link.expiresAt <= now()) { roomLinks.delete(key); return null; }
+  const room = rooms.get(link.roomId);
+  if (!room || room.instanceId !== link.instanceId) return null;
+  return { room, expiresAt: link.expiresAt };
+}
+
+async function handleRoomLink(req, res, rel) {
+  if (!sameOrigin(req)) return json(res, 403, { error: '来源不允许' });
+  const account = auth.current(tokenFromCookie(req, tabIdFromHeader(req)));
+  try {
+    if (rel === '/api/room-link/preview' && req.method === 'POST') {
+      const { token } = await readJson(req);
+      const found = roomLinkInfo(token);
+      if (!found) return json(res, 404, { error: '邀请链接已过期或房间已关闭' });
+      const { room, expiresAt } = found;
+      const host = room.players.get(room.host);
+      return json(res, 200, { roomId: room.id, instanceId: room.instanceId, map: roomMap(room).rules.displayName,
+        host: host?.name || '房主', players: room.players.size, vacancies: room.size * 2 - room.players.size,
+        goal: room.goal, timeLimitMinutes: MATCH_MS / 60000, expiresAt });
+    }
+    if (rel !== '/api/room-link' || req.method !== 'POST') return json(res, 405, { error: '方法不允许' });
+    if (!account) return json(res, 401, { error: '请先登录' });
+    const body = await readJson(req);
+    const room = rooms.get(String(body.roomId || ''));
+    if (!room) return json(res, 404, { error: '房间不存在' });
+    const host = room.players.get(room.host);
+    if (host?.accountId !== account.id) return json(res, 403, { error: '仅房主可以生成邀请链接' });
+    if (room.players.size >= room.size * 2) return json(res, 409, { error: '房间已满' });
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = now() + ROOM_LINK_MINUTES * 60000;
+    roomLinks.set(crypto.createHash('sha256').update(token).digest('hex'), { roomId: room.id, instanceId: room.instanceId, expiresAt });
+    return json(res, 200, { token, expiresAt });
+  } catch (error) {
+    return json(res, error.status || 500, { error: error.status ? error.message : '服务器错误' });
+  }
 }
 
 function playerBrief(player) {
@@ -533,6 +578,7 @@ function leaveRoom(player) {
   if (room.players.size === 0) {
     if (room.state === 'playing') endMatch(room, 'empty');
     rooms.delete(room.id);
+    for (const [key, link] of roomLinks) if (link.roomId === room.id && link.instanceId === room.instanceId) roomLinks.delete(key);
     sendRoomListToLobbyIdle();
     return;
   }
@@ -924,6 +970,7 @@ const server = http.createServer((req, res) => {
   if (rel === '/') rel = '/index.html';
 
   if (rel.startsWith('/api/auth/')) { void handleAuth(req, res, rel); return; }
+  if (rel === '/api/room-link' || rel === '/api/room-link/preview') { void handleRoomLink(req, res, rel); return; }
   if (rel.startsWith('/api/avatar/') && req.method === 'GET') {
     const id = rel.slice('/api/avatar/'.length);
     const row = /^[a-f0-9-]{36}$/.test(id) ? auth.avatar(id) : null;
@@ -989,8 +1036,8 @@ const server = http.createServer((req, res) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }).end('404'); return; }
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': rel === '/invite.html' ? 'no-store' : rel.endsWith('.mp3') ? 'public, max-age=86400' : 'no-cache',
-      ...(rel === '/invite.html' ? { 'Referrer-Policy': 'no-referrer' } : {}),
+      'Cache-Control': rel === '/invite.html' || rel === '/room-invite.html' ? 'no-store' : rel.endsWith('.mp3') ? 'public, max-age=86400' : 'no-cache',
+      ...(rel === '/invite.html' || rel === '/room-invite.html' ? { 'Referrer-Policy': 'no-referrer' } : {}),
       'X-Content-Type-Options': 'nosniff',
     });
     res.end(buf);
@@ -1112,6 +1159,10 @@ function handle(player, msg) {
     case 'join': {
       const r = rooms.get(String(msg.roomId || ''));
       if (!r) { send(player.ws, { t: 'err', msg: '房间不存在' }); return; }
+      if (msg.linkToken) {
+        const link = roomLinkInfo(msg.linkToken);
+        if (!link || link.room !== r) { send(player.ws, { t: 'err', msg: '邀请链接已过期或房间已关闭' }); return; }
+      }
       if (msg.instanceId && msg.instanceId !== r.instanceId) { send(player.ws, { t: 'err', msg: '原邀请房间已不存在' }); return; }
       if (r === room) return;
       if (r.kickedAccounts.has(player.accountId)) { send(player.ws, { t: 'err', msg: '你已被移出该房间' }); return; }

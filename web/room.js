@@ -116,7 +116,7 @@
     }
     refresh() { this.net.send({ t: 'list' }); }
     create(cfg) { this.net.send({ t: 'create', name: cfg.name, mapId: cfg.mapId, size: cfg.size, goal: cfg.goal, team: cfg.team || 'BL' }); }
-    join(roomId, instanceId) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}) }); }
+    join(roomId, instanceId, linkToken) { this.net.send({ t: 'join', roomId, ...(instanceId ? { instanceId } : {}), ...(linkToken ? { linkToken } : {}) }); }
     leave() { this.net.send({ t: 'leave' }); this.room = null; this.me = null; this.inGame = false; this.chat = []; }
 
     /* ---------------- 房间内 ---------------- */

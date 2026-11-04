@@ -503,6 +503,7 @@
       let rankLoadError = '';
       let lastSettlement = null;
       let inviteStatus = '';
+      let inviteLinkValue = '';
       let lobbyNotice = '';
       let activeInviteId = null;
       let socialTab = 'friends';
@@ -1142,6 +1143,10 @@
       /* ---------------- 连接页 ---------------- */
       function renderConnect(body) {
         if (authChecking) { body.appendChild(el('div', 'cfTip', '正在检查登录状态…')); return; }
+        if (autoJoinIntent?.linkInfo) {
+          const info = autoJoinIntent.linkInfo;
+          body.appendChild(el('div', 'cfTip', `房间邀请 · ${esc(info.map)} · 房主 ${esc(info.host)} · ${info.players} 人，空位 ${info.vacancies} · 目标 ${info.goal} 杀 · 限时 ${info.timeLimitMinutes} 分钟`));
+        }
         if (authUser) {
           body.appendChild(el('div', 'cfTip', `已登录：${esc(authUser.name)}（${esc(authUser.email)}），正在连接联机大厅…`));
           const retry = el('button', 'cf ghost', '重新连接');
@@ -1349,6 +1354,26 @@
         intro.appendChild(el('aside', 'cfMapPoster',
           `<img src="${esc(selectedMap.poster)}" alt="${esc(selectedMap.displayName)}地图海报"><span>当前地图 · ${esc(selectedMap.displayName)}</span>`));
         details.appendChild(intro);
+        if (room.isHost) {
+          const inviteLink = el('button', 'cf ghost', '生成邀请链接');
+          inviteLink.onclick = async () => {
+            inviteLink.disabled = true;
+            try {
+              const response = await fetch('/api/room-link', { method: 'POST', credentials: 'same-origin',
+                headers: { ...CFTabSession.headers(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId: r.id }) });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.error || '生成失败');
+              const link = `${location.origin}/room-invite.html#token=${data.token}`;
+              inviteLinkValue = link;
+              try { await navigator.clipboard.writeText(link); inviteStatus = '链接已复制'; }
+              catch (_) { inviteStatus = '链接已生成，请从下方复制'; }
+              inviteStatus += `，${new Date(data.expiresAt).toLocaleTimeString('zh-CN')} 前有效`;
+            } catch (error) { inviteStatus = error.message || '无法复制邀请链接'; }
+            render();
+          };
+          details.appendChild(inviteLink);
+        }
 
         const teams = el('div', 'cfTeams');
         const slots = room.slots();
@@ -1408,6 +1433,14 @@
                             : full ? '房间已满，房主可以开始对战。'
                                    : '两边都已有玩家，房主可以开始对战。'));
         if (inviteStatus) details.appendChild(el('div', 'cfTip', esc(inviteStatus)));
+        if (room.isHost && inviteLinkValue) {
+          const linkField = el('input', 'cf');
+          linkField.value = inviteLinkValue;
+          linkField.readOnly = true;
+          linkField.setAttribute('aria-label', '房间邀请链接');
+          linkField.onclick = () => linkField.select();
+          details.appendChild(linkField);
+        }
 
         const chat = el('section', 'cfChat');
         chat.appendChild(el('div', 'cfSectionTitle', '房间聊天'));
@@ -1478,7 +1511,7 @@
 
         const foot = el('div', 'cfFoot');
         const btnLeave = el('button', 'cf ghost', '离开房间');
-        btnLeave.onclick = () => { inviteStatus = ''; room.leave(); };
+        btnLeave.onclick = () => { inviteStatus = ''; inviteLinkValue = ''; room.leave(); };
 
         foot.appendChild(btnLeave);
         if (choosingBattle) {
@@ -1681,7 +1714,7 @@
             const target = room.rooms.find((r) => r.id === intent.roomId && r.instanceId === intent.instanceId);
             if (target) {
               autoJoinPending = true;
-              room.join(intent.roomId, intent.instanceId);
+              room.join(intent.roomId, intent.instanceId, intent.linkToken);
             } else lobbyNotice = '邀请的房间已不存在，已返回房间列表';
           }
         }
