@@ -83,6 +83,45 @@ test('好友私聊可读写，删除好友同时清空双方历史', () => {
   }
 });
 
+test('私聊按配置到期，历史和未读数立即排除旧消息', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-retention-'));
+  const dbPath = path.join(dir, 'accounts.sqlite');
+  const oldPath = process.env.AUTH_DB_PATH;
+  const oldRetention = process.env.PRIVATE_MESSAGE_RETENTION_MINUTES;
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE accounts (id TEXT PRIMARY KEY,name TEXT,email TEXT,name_key TEXT);
+    CREATE TABLE rank_profiles (account_id TEXT PRIMARY KEY,xp_total INTEGER);`);
+  for (const id of ['a', 'b']) db.prepare('INSERT INTO accounts VALUES (?,?,?,?)').run(id, id, `${id}@example.test`, id);
+  db.close();
+  process.env.AUTH_DB_PATH = dbPath;
+  process.env.PRIVATE_MESSAGE_RETENTION_MINUTES = '1';
+  let social;
+  try {
+    social = makeSocial();
+    social.respond('b', social.sendRequest('a', 'b').id, true);
+    const message = social.sendPrivate('a', 'b', '过期消息');
+    assert.equal(social.friends('b')[0].unreadCount, 1);
+    const check = new DatabaseSync(dbPath);
+    check.prepare('UPDATE private_messages SET created_at=? WHERE id=?').run(Date.now() - 61_000, message.id);
+    check.close();
+    assert.deepEqual(social.privateHistory('b', 'a').messages, []);
+    assert.equal(social.friends('b')[0].unreadCount, 0);
+    assert.deepEqual(social.markPrivateRead('b', 'a').ids, []);
+    social.close(); social = null;
+    social = makeSocial();
+    const verify = new DatabaseSync(dbPath);
+    assert.equal(verify.prepare('SELECT COUNT(*) AS n FROM private_messages').get().n, 0);
+    verify.close();
+  } finally {
+    social?.close();
+    if (oldPath === undefined) delete process.env.AUTH_DB_PATH;
+    else process.env.AUTH_DB_PATH = oldPath;
+    if (oldRetention === undefined) delete process.env.PRIVATE_MESSAGE_RETENTION_MINUTES;
+    else process.env.PRIVATE_MESSAGE_RETENTION_MINUTES = oldRetention;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('账号头像写入后版本递增，旧账号表可迁移', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-avatar-'));
   const dbPath = path.join(dir, 'accounts.sqlite');

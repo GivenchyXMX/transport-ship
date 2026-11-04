@@ -1080,6 +1080,28 @@
       }
 
       async function authRequest(path, body) {
+        if (body && ['register', 'login', 'reset-password'].includes(path)) {
+          if (!window.forge) throw new Error('密码加密组件未加载，请刷新页面');
+          const challengeData = await authRequest('password-challenge');
+          const publicKey = forge.pki.publicKeyFromPem(challengeData.publicKey);
+          const plaintext = forge.util.encodeUtf8(JSON.stringify({
+            password: body.password, challenge: challengeData.challenge,
+          }));
+          const key = forge.random.getBytesSync(32);
+          const iv = forge.random.getBytesSync(12);
+          const cipher = forge.cipher.createCipher('AES-GCM', key);
+          cipher.start({ iv, tagLength: 128 });
+          cipher.update(forge.util.createBuffer(plaintext));
+          if (!cipher.finish()) throw new Error('密码加密失败');
+          const encryptedKey = publicKey.encrypt(key, 'RSA-OAEP', {
+            md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() },
+          });
+          body = { ...body, passwordCiphertext: forge.util.encode64(cipher.output.getBytes()),
+            passwordKey: forge.util.encode64(encryptedKey), passwordIv: forge.util.encode64(iv),
+            passwordTag: forge.util.encode64(cipher.mode.tag.getBytes()),
+            passwordChallenge: challengeData.challenge };
+          delete body.password;
+        }
         const response = await fetch('/api/auth/' + path, {
           method: body === undefined ? 'GET' : 'POST',
           headers: { ...CFTabSession.headers(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },

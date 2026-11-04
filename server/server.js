@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { makeAuth } = require('./auth');
+const passwordTransport = require('./password-transport');
 const { makeLeaderboard, PERIODS } = require('./leaderboard');
 const { makeRank } = require('./rank');
 const { makeSocial } = require('./social');
@@ -48,6 +49,7 @@ const PUBLIC_FILES = new Set([
   '/index.html', '/transport-ship-mp.html', '/invite.html', '/web/testbed.html',
   '/web/game.css', '/web/game.js',
   '/web/net.js', '/web/room.js', '/web/rank-icons.js', '/web/ui.js', '/web/mp.js',
+  '/web/assets/forge.min.js',
   '/web/assets/audio/cf-classic-lobby-unbound.mp3',
   '/web/assets/audio/cf-classic-room-metrohead.mp3',
   '/web/assets/maps/cf-transport-ship.png',
@@ -118,6 +120,8 @@ async function handleAuth(req, res, rel) {
   try {
     if (rel === '/api/auth/config' && req.method === 'GET')
       return json(res, 200, { registerEmailSuffix: auth.registerEmailSuffix });
+    if (rel === '/api/auth/password-challenge' && req.method === 'GET')
+      return json(res, 200, passwordTransport.challenge());
     if (rel === '/api/auth/me' && req.method === 'GET') {
       const account = auth.current(tokenFromCookie(req, tabId));
       return account ? json(res, 200, { account }) : json(res, 401, { error: '请先登录' });
@@ -148,20 +152,20 @@ async function handleAuth(req, res, rel) {
     }
     const body = await readJson(req);
     const ip = req.socket.remoteAddress || '';
-    if (rel === '/api/auth/register') return json(res, 200, await auth.register(body, ip));
+    if (rel === '/api/auth/register') return json(res, 200, await auth.register({ ...body, password: passwordTransport.decrypt(body) }, ip));
     if (rel === '/api/auth/verify-register') {
       const result = auth.verifyRegister(body, ip);
       setSessionCookie(res, tabId, result.token);
       return json(res, 200, { account: result.account });
     }
     if (rel === '/api/auth/login') {
-      const result = await auth.login(body, ip);
+      const result = await auth.login({ ...body, password: passwordTransport.decrypt(body) }, ip);
       setSessionCookie(res, tabId, result.token);
       return json(res, 200, { account: result.account });
     }
     if (rel === '/api/auth/forgot-password') return json(res, 200, await auth.forgotPassword(body, ip));
     if (rel === '/api/auth/reset-password') {
-      const { accountId } = await auth.resetPassword(body, ip);
+      const { accountId } = await auth.resetPassword({ ...body, password: passwordTransport.decrypt(body) }, ip);
       for (const player of clients.values()) if (player.accountId === accountId) player.ws.close(4001, '密码已重置');
       clearSessionCookie(res, tabId);
       return json(res, 200, { message: '密码已重置，请使用新密码登录' });

@@ -6,11 +6,22 @@ const { DatabaseSync } = require('node:sqlite');
 const nodemailer = require('nodemailer');
 const { rankOf } = require('./rank');
 
-const INVITE_TTL = 30 * 60 * 1000;
+function positiveMinutes(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > 525600)
+    throw new Error(`${name} 必须是 1–525600 的整数分钟`);
+  return value;
+}
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error; };
 
 function makeSocial() {
+  const inviteMinutes = positiveMinutes('INVITE_TTL_MINUTES', 10);
+  const messageRetentionMinutes = positiveMinutes('PRIVATE_MESSAGE_RETENTION_MINUTES', 30 * 24 * 60);
+  const inviteTtl = inviteMinutes * 60_000;
+  const retentionMs = messageRetentionMinutes * 60_000;
   const db = new DatabaseSync(process.env.AUTH_DB_PATH || path.resolve(__dirname, '../.runtime/accounts.sqlite'));
   db.exec(`PRAGMA journal_mode=WAL;
     CREATE TABLE IF NOT EXISTS friend_requests (
@@ -29,6 +40,7 @@ function makeSocial() {
     );
     CREATE INDEX IF NOT EXISTS private_messages_pair_time
       ON private_messages(account_low,account_high,created_at DESC,id DESC);
+    CREATE INDEX IF NOT EXISTS private_messages_created_at ON private_messages(created_at);
     CREATE TABLE IF NOT EXISTS offline_invitations (
       id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, sender_id TEXT NOT NULL,
       target_id TEXT NOT NULL, kind TEXT NOT NULL, room_id TEXT, room_instance_id TEXT,
@@ -41,6 +53,15 @@ function makeSocial() {
   if (!columns.includes('avatar_version')) db.exec('ALTER TABLE accounts ADD COLUMN avatar_version INTEGER NOT NULL DEFAULT 0');
   const messageColumns = db.prepare('PRAGMA table_info(private_messages)').all().map((column) => column.name);
   if (!messageColumns.includes('read_at')) db.exec('ALTER TABLE private_messages ADD COLUMN read_at INTEGER');
+  function pruneMessages() {
+    db.prepare('DELETE FROM private_messages WHERE created_at<?').run(Date.now() - retentionMs);
+  }
+  pruneMessages();
+  const pruneTimer = setInterval(() => {
+    try { pruneMessages(); }
+    catch (error) { console.error('[social] 清理过期私聊失败:', error); }
+  }, 60 * 60_000);
+  pruneTimer.unref();
 
   const mailReady = !!(process.env.SMTP_HOST && process.env.SMTP_FROM && process.env.SMTP_USER && process.env.SMTP_PASS);
   const mailer = mailReady ? nodemailer.createTransport({
@@ -90,7 +111,7 @@ function makeSocial() {
       WHERE f.account_low=? OR f.account_high=? ORDER BY a.name_key`).all(me, me, me).map((row) => {
         const [low, high] = pair(me, row.id);
         return { ...publicAccount(row), unreadCount: db.prepare(`SELECT COUNT(*) AS n FROM private_messages
-          WHERE account_low=? AND account_high=? AND sender_id=? AND read_at IS NULL`).get(low, high, row.id).n };
+          WHERE account_low=? AND account_high=? AND sender_id=? AND read_at IS NULL AND created_at>=?`).get(low, high, row.id, Date.now() - retentionMs).n };
       });
   }
   function requests(me) {
@@ -152,8 +173,8 @@ function makeSocial() {
     const [low, high] = pair(me, target);
     const cutoff = Number.isSafeInteger(Number(before)) && Number(before) > 0 ? Number(before) : Number.MAX_SAFE_INTEGER;
     const rows = db.prepare(`SELECT rowid AS seq,id,sender_id AS senderId,body,created_at AS createdAt,read_at AS readAt
-      FROM private_messages WHERE account_low=? AND account_high=? AND rowid<?
-      ORDER BY rowid DESC LIMIT 51`).all(low, high, cutoff);
+      FROM private_messages WHERE account_low=? AND account_high=? AND rowid<? AND created_at>=?
+      ORDER BY rowid DESC LIMIT 51`).all(low, high, cutoff, Date.now() - retentionMs);
     return { messages: rows.slice(0, 50).reverse(), nextBefore: rows.length > 50 ? rows[49].seq : null };
   }
   function sendPrivate(me, target, body) {
@@ -171,10 +192,10 @@ function makeSocial() {
     if (!isFriend(me, target)) fail(403, '只能查看好友私聊');
     const [low, high] = pair(me, target);
     const ids = db.prepare(`SELECT id FROM private_messages WHERE account_low=? AND account_high=?
-      AND sender_id=? AND read_at IS NULL`).all(low, high, target).map((row) => row.id);
+      AND sender_id=? AND read_at IS NULL AND created_at>=?`).all(low, high, target, Date.now() - retentionMs).map((row) => row.id);
     const readAt = Date.now();
     if (ids.length) db.prepare(`UPDATE private_messages SET read_at=? WHERE account_low=? AND account_high=?
-      AND sender_id=? AND read_at IS NULL`).run(readAt, low, high, target);
+      AND sender_id=? AND read_at IS NULL AND created_at>=?`).run(readAt, low, high, target, Date.now() - retentionMs);
     return { ids, readAt };
   }
   function online(me, t = Date.now()) {
@@ -198,12 +219,12 @@ function makeSocial() {
     const id = crypto.randomUUID();
     db.prepare(`INSERT INTO offline_invitations VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(id, hash(token), senderId,
       targetId, room ? 'room' : 'online', room?.id || null, room?.instanceId || null,
-      t, t + INVITE_TTL, null, 'pending');
+      t, t + inviteTtl, null, 'pending');
     try {
       const roomName = room ? `加入房间「${room.name}」` : '进入联机大厅';
       await mailer.sendMail({ from: process.env.SMTP_FROM, to: target.email,
         subject: `${sender.name} 邀请你${roomName} · 运输船`,
-        text: `${sender.name} 邀请你${roomName}。请在 30 分钟内点击以下链接：\n${origin}/invite.html#token=${token}\n此链接仅可使用一次。若非本人操作，请忽略此邮件。` });
+        text: `${sender.name} 邀请你${roomName}。请在 ${inviteMinutes} 分钟内点击以下链接：\n${origin}/invite.html#token=${token}\n此链接仅可使用一次，使用后立即失效。若非本人操作，请忽略此邮件。` });
       db.prepare(`UPDATE offline_invitations SET delivery_status='sent' WHERE id=?`).run(id);
       return { ok: true };
     } catch (error) {
@@ -238,7 +259,7 @@ function makeSocial() {
     return row.target_id;
   }
   return { players, friends, requests, sendRequest, respond, removeFriend, privateHistory, sendPrivate, markPrivateRead, online, seen,
-    isFriend, account, sendOffline, inviteTarget, redeem, close: () => db.close() };
+    isFriend, account, sendOffline, inviteTarget, redeem, close: () => { clearInterval(pruneTimer); db.close(); } };
 }
 
 module.exports = { makeSocial };
