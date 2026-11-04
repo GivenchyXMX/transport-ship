@@ -1,0 +1,60 @@
+server/social.js
+  s_e1334bd0d4102a::t_32c1d4eb131cbe 9-16,21-24,43,56-59,64,114,176-177,195,198,222,227,262
+  s_e1334bd0d4102a::t_66cae0d247b67d 60-63
+web/assets/forge.LICENSE
+  s_e1334bd0d4102a::t_964a25883fc19c 1-331
+deploy/common.sh
+  s_e1334bd0d4102a::t_04f0d8dee63f93 21
+server/package.json
+  s_e1334bd0d4102a::t_de30d8638838c0 13
+  s_e1334bd0d4102a::t_b5cec017b418d6 18
+server/server.js
+  s_e1334bd0d4102a::t_5cba0840539b93 25,52,123-124,155,162,168
+server/test/social-order.test.js
+  s_e1334bd0d4102a::t_38b71bc56ae304 86-124
+docs/好友系统设计.md
+  s_e1334bd0d4102a::t_04f0d8dee63f93 44
+web/ui.js
+  s_e1334bd0d4102a::t_8690ac7488b87f 1090-1096,1099-1101
+  s_e1334bd0d4102a::t_c65e6a0201d219 1083-1089,1097-1098,1102-1104
+transport-ship-mp.html
+  s_e1334bd0d4102a::t_5cba0840539b93 17
+server/password-transport.js
+  s_e1334bd0d4102a::t_5705a927e704c4 1-24,26,32-38,48-55
+  s_e1334bd0d4102a::t_8690ac7488b87f 25,27-31,39-47
+server/test/password-transport.test.js
+  s_e1334bd0d4102a::t_de30d8638838c0 1-7,26-27,29-35,37
+  s_e1334bd0d4102a::t_0307f0adc03c23 8-25,28,36
+deploy/config.env.example
+  s_e1334bd0d4102a::t_04f0d8dee63f93 6-9
+docs/好友私聊设计.md
+  s_e1334bd0d4102a::t_04f0d8dee63f93 11-12
+docs/自行部署.md
+  s_e1334bd0d4102a::t_c8312114cdd6c4 63-64,75
+  s_e1334bd0d4102a::t_8a210d60762bde 11-12
+server/package-lock.json
+  s_e1334bd0d4102a::t_e0b575a54b2250 11,19-27
+web/assets/forge.min.js
+  s_e1334bd0d4102a::t_83660f9b2819ac 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6ab3a0c70d1e50cb122aebae16df3b50107b17a4",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_e1334bd0d4102a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a243-1e9e-7731-84f5-c3a718fc0c05",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
