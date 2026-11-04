@@ -1,0 +1,41 @@
+docs/自行部署.md
+  s_831ed3476d5133::t_a4a87e2fa94fd9 64
+server/server.js
+  s_831ed3476d5133::t_de58301cd1830f 51,390,1039-1040
+  s_831ed3476d5133::t_5f81af449dd6a3 581
+  s_831ed3476d5133::t_a81261f6d47705 380,384-385,394,973
+  s_831ed3476d5133::t_2460e2164808a6 1162-1165
+  s_831ed3476d5133::t_e948ddddb2038e 44-45,281,369-379,381-383,386-389,391-393,395-409
+  s_831ed3476d5133::t_1f10d5450e6abb 410
+web/room.js
+  s_831ed3476d5133::t_2460e2164808a6 119
+web/ui.js
+  s_831ed3476d5133::t_27a4123ba0f1f8 1146-1149,1357-1367,1372-1376,1717
+  s_831ed3476d5133::t_0e2bd9b37be146 506,1368-1371,1436-1443,1514
+room-invite.html
+  s_831ed3476d5133::t_9e8ae41a8e3676 1-22,25-35
+  s_831ed3476d5133::t_a81261f6d47705 23-24
+docs/房间邀请链接设计.md
+  s_831ed3476d5133::t_a4a87e2fa94fd9 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a776034a222e6661748fa08068bbd32e3c69306",
+  "prompts": {},
+  "humans": {
+    "h_c19cdd304bb9a6": {
+      "author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  },
+  "sessions": {
+    "s_831ed3476d5133": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a5c9-7001-7251-ae4a-cb23d76032a7",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "jiuwei <jiuwei@dtstack.com>"
+    }
+  }
+}
